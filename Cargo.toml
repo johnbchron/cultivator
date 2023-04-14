@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.10.1", features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render"] }
+bevy = { version = "0.10.1", features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr"] }
 bevy_diagnostic_vertex_count = { git = "https://github.com/johnbchron/bevy_diagnostic_vertex_count", tag = "v0.3" }
 hexx = "0.5.3"
 rand = "0.8.5"
@@ -20,3 +20,6 @@ opt-level = 1
 # Enable high optimizations for dependencies
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.release]
+lto = "thin"
