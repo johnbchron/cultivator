@@ -7,34 +7,27 @@ use hex::HexItem;
 use bevy::{
   app::{App, PluginGroup},
   asset::{AssetServer, Assets, Handle},
-  core_pipeline::{core_2d::Camera2dBundle, core_3d::Camera3dBundle},
+  core_pipeline::core_3d::Camera3dBundle,
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin,
     LogDiagnosticsPlugin,
   },
   ecs::{
     component::Component,
-    query::{Changed, With},
+    query::With,
     system::{Commands, Query, Res, ResMut, Resource},
     world::{FromWorld, World},
   },
   input::{keyboard::KeyCode, Input},
-  math::{Quat, UVec2, Vec3},
+  math::{Quat, Vec3},
   pbr::{DirectionalLightBundle, PbrBundle, StandardMaterial},
   render::{
-    camera::{
-      Camera, OrthographicProjection, Projection, RenderTarget, ScalingMode,
-      Viewport,
-    },
+    camera::{Camera, OrthographicProjection, Projection, ScalingMode},
     mesh::{Indices, Mesh},
-    render_resource::{
-      Extent3d, PrimitiveTopology, TextureDescriptor, TextureDimension,
-      TextureFormat, TextureUsages,
-    },
-    texture::{BevyDefault, Image, ImagePlugin},
-    view::{Msaa, RenderLayers},
+    render_resource::PrimitiveTopology,
+    texture::{Image, ImagePlugin},
+    view::Msaa,
   },
-  sprite::SpriteBundle,
   time::Time,
   transform::components::Transform,
   utils::default,
@@ -44,6 +37,7 @@ use bevy::{
 use bevy_diagnostic_vertex_count::{
   VertexCountDiagnosticsPlugin, VertexCountDiagnosticsSettings,
 };
+use bevy_pixel_cam::{PixelCamPlugin, PixelCamSettings};
 
 use hexx::*;
 
@@ -59,17 +53,6 @@ struct HexMaterials(HashMap<HexItem, Handle<StandardMaterial>>);
 
 #[derive(Resource)]
 struct HexMeshes(HashMap<HexItem, Handle<Mesh>>);
-
-#[derive(Resource)]
-struct RenderSettings {
-  frac_resolution: f32,
-}
-
-#[derive(Component)]
-struct PixelCamera;
-
-#[derive(Component)]
-struct PixelCanvas;
 
 impl FromWorld for HexMaterials {
   fn from_world(world: &mut World) -> Self {
@@ -94,14 +77,6 @@ impl FromWorld for HexMeshes {
       map.insert(item, meshes.add(build_hex_mesh(item.hex_height())));
     }
     Self(map)
-  }
-}
-
-impl Default for RenderSettings {
-  fn default() -> Self {
-    Self {
-      frac_resolution: INITIAL_PIXEL_SCALE.recip(),
-    }
   }
 }
 
@@ -172,9 +147,8 @@ fn build_test_grid(
 
 fn setup_graphics(
   mut commands: Commands,
-  windows: Query<&Window>,
-  render_settings: Res<RenderSettings>,
-  mut images: ResMut<Assets<Image>>,
+  _windows: Query<&Window>,
+  _images: ResMut<Assets<Image>>,
 ) {
   // spawn lighting
   commands.spawn(DirectionalLightBundle {
@@ -183,45 +157,8 @@ fn setup_graphics(
     ..default()
   });
 
-  // first pass output size
-  let window = windows.iter().next().unwrap();
-  let window_size = Extent3d {
-    width: window.resolution.width() as u32,
-    height: window.resolution.height() as u32,
-    ..Default::default()
-  };
-  let scaled_size = Extent3d {
-    width: (window_size.width as f32 * render_settings.frac_resolution) as u32,
-    height: (window_size.height as f32 * render_settings.frac_resolution)
-      as u32,
-    ..Default::default()
-  };
-
-  // image for first pass output
-  let mut first_pass_output = Image {
-    texture_descriptor: TextureDescriptor {
-      label: None,
-      size: scaled_size,
-      dimension: TextureDimension::D2,
-      format: TextureFormat::bevy_default(),
-      mip_level_count: 1,
-      sample_count: 1,
-      usage: TextureUsages::TEXTURE_BINDING
-        | TextureUsages::COPY_DST
-        | TextureUsages::RENDER_ATTACHMENT,
-      view_formats: &[],
-    },
-    ..Default::default()
-  };
-
-  // fill first pass buffer with zeroes
-  first_pass_output.resize(scaled_size);
-
-  let first_pass_output_handle = images.add(first_pass_output);
-
   let isometric_rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4);
 
-  // first pass camera
   commands.spawn((
     Camera3dBundle {
       transform: Transform::from_translation(Vec3::new(0.0, 20.0, 20.0))
@@ -232,117 +169,18 @@ fn setup_graphics(
           500.0 + 20.0,
         )),
       projection: Projection::Orthographic(OrthographicProjection {
-        scale: 1.0 / render_settings.frac_resolution,
         scaling_mode: ScalingMode::WindowSize(UNIT_TO_PIXEL),
         ..Default::default()
       }),
-      camera: Camera {
-        target: RenderTarget::Image(first_pass_output_handle.clone()),
-        viewport: Some(Viewport {
-          physical_size: UVec2 {
-            x: scaled_size.width,
-            y: scaled_size.height,
-          },
-          ..Default::default()
-        }),
-        ..Default::default()
-      },
       ..Default::default()
     },
-    PixelCamera,
+    PixelCamSettings { intensity: 0.01 },
   ));
-
-  let post_processing_pass_layer =
-    RenderLayers::layer((RenderLayers::TOTAL_LAYERS - 1) as u8);
-
-  // the sprite that the image from the first pass will be displayed on.
-  commands.spawn((
-    SpriteBundle {
-      // mesh: quad_handle,
-      texture: first_pass_output_handle.clone().into(),
-      transform: Transform::from_translation(Vec3::ZERO).with_scale(Vec3::new(
-        render_settings.frac_resolution.recip(),
-        render_settings.frac_resolution.recip(),
-        0.0,
-      )),
-      ..Default::default()
-    },
-    PixelCanvas,
-    post_processing_pass_layer,
-  ));
-
-  // The post-processing pass camera.
-  commands.spawn((
-    Camera2dBundle {
-      camera: Camera {
-        // renders after the first main camera which has default value: 0.
-        order: 1,
-        ..default()
-      },
-      ..Camera2dBundle::default()
-    },
-    post_processing_pass_layer,
-  ));
-}
-
-// edit the camera viewport to maintain fractional pixel resolution
-fn maintain_fractional_camera_resolution(
-  mut cameras: Query<&mut Camera, With<PixelCamera>>,
-  mut canvases: Query<&mut Handle<Image>, With<PixelCanvas>>,
-  windows: Query<&Window, Changed<Window>>,
-  render_settings: Res<RenderSettings>,
-  mut images: ResMut<Assets<Image>>,
-) {
-  match windows.iter().next() {
-    Some(window) => {
-      let scaled_size = Extent3d {
-        width: (window.resolution.width() as f32
-          * render_settings.frac_resolution) as u32,
-        height: (window.resolution.height() as f32
-          * render_settings.frac_resolution) as u32,
-        ..Default::default()
-      };
-
-      let mut camera = cameras.iter_mut().next().unwrap();
-      let mut canvas = canvases.iter_mut().next().unwrap();
-
-      let mut new_first_pass_target = Image {
-        texture_descriptor: TextureDescriptor {
-          label: None,
-          size: scaled_size,
-          dimension: TextureDimension::D2,
-          format: TextureFormat::bevy_default(),
-          mip_level_count: 1,
-          sample_count: 1,
-          usage: TextureUsages::TEXTURE_BINDING
-            | TextureUsages::COPY_DST
-            | TextureUsages::RENDER_ATTACHMENT,
-          view_formats: &[],
-        },
-        ..Default::default()
-      };
-      new_first_pass_target.resize(scaled_size);
-
-      let new_first_pass_target_handle = images.add(new_first_pass_target);
-      *canvas = new_first_pass_target_handle.clone();
-      camera.target = RenderTarget::Image(new_first_pass_target_handle);
-
-      camera.viewport = Some(Viewport {
-        physical_size: UVec2 {
-          x: scaled_size.width,
-          y: scaled_size.height,
-        },
-        ..Default::default()
-      });
-    }
-    None => (),
-  }
 }
 
 fn handle_camera_movement(
   mut query: Query<(&mut Transform, &mut Projection), With<Camera>>,
   time: Res<Time>,
-  render_settings: Res<RenderSettings>,
   keyboard_input: Res<Input<KeyCode>>,
 ) {
   for (mut transform, projection) in query.iter_mut() {
@@ -366,8 +204,7 @@ fn handle_camera_movement(
       if keyboard_input.pressed(KeyCode::Q) {
         match projection {
           Projection::Orthographic(ref mut ortho) => {
-            ortho.scale += ZOOM_SPEED * time.delta_seconds()
-              / render_settings.frac_resolution;
+            ortho.scale += ZOOM_SPEED * time.delta_seconds();
           }
           _ => {
             unimplemented!()
@@ -377,9 +214,7 @@ fn handle_camera_movement(
       if keyboard_input.pressed(KeyCode::E) {
         match projection {
           Projection::Orthographic(ref mut ortho) => {
-            ortho.scale -= ZOOM_SPEED * time.delta_seconds()
-              / render_settings.frac_resolution;
-            // *projection = Projection::Orthographic(ortho);
+            ortho.scale -= ZOOM_SPEED * time.delta_seconds();
           }
           _ => {
             unimplemented!()
@@ -410,8 +245,7 @@ fn main() {
     )
     // graphics config
     .insert_resource(Msaa::Off)
-    .insert_resource(RenderSettings::default())
-    .add_system(maintain_fractional_camera_resolution)
+    .add_plugin(PixelCamPlugin)
     // diagnostic config
     .add_plugin(LogDiagnosticsPlugin::default())
     .add_plugin(FrameTimeDiagnosticsPlugin::default())
@@ -421,7 +255,7 @@ fn main() {
     // prebuild meshes and materials
     .init_resource::<HexMaterials>()
     .init_resource::<HexMeshes>()
-    // prebuild game logic config
+    // setup graphics
     .add_startup_system(setup_graphics)
     // spawn game objects
     .add_startup_system(build_test_grid)

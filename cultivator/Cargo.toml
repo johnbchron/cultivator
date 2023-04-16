@@ -1,0 +1,15 @@
+[package]
+name = "cultivator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = { version = "0.10.1" }
+bevy_diagnostic_vertex_count = { git = "https://github.com/johnbchron/bevy_diagnostic_vertex_count", tag = "v0.3" }
+bevy_pixel_cam = { path = "../bevy_pixel_cam" }
+hexx = "0.5.3"
+rand = "0.8.5"
+strum = "0.24"
+strum_macros = "0.24"
