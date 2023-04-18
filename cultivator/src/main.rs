@@ -15,7 +15,7 @@ use bevy::{
   ecs::{
     component::Component,
     query::With,
-    system::{Commands, Query, Res, ResMut, Resource},
+    system::{Commands, Query, Res, Resource},
     world::{FromWorld, World},
   },
   input::{keyboard::KeyCode, Input},
@@ -25,7 +25,7 @@ use bevy::{
     camera::{Camera, OrthographicProjection, Projection, ScalingMode},
     mesh::{Indices, Mesh},
     render_resource::PrimitiveTopology,
-    texture::{Image, ImagePlugin},
+    texture::{ImagePlugin},
     view::Msaa,
   },
   time::Time,
@@ -147,9 +147,10 @@ fn build_test_grid(
 
 fn setup_graphics(
   mut commands: Commands,
-  _windows: Query<&Window>,
-  _images: ResMut<Assets<Image>>,
+  windows: Query<&Window>,
 ) {
+  let window = windows.iter().next().unwrap();
+  
   // spawn lighting
   commands.spawn(DirectionalLightBundle {
     transform: Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
@@ -174,7 +175,10 @@ fn setup_graphics(
       }),
       ..Default::default()
     },
-    PixelCamSettings { intensity: 0.01 },
+    PixelCamSettings {
+      new_pixel_size: 2.0,
+      window_size: Vec2::new(window.width(), window.height())
+    },
   ));
 }
 

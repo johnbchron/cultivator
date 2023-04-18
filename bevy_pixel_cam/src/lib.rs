@@ -5,7 +5,9 @@
 //!
 //! This is a fairly low level example and assumes some familiarity with rendering concepts and wgpu.
 
+use bevy::reflect::TypeUuid;
 use bevy::{
+  asset::load_internal_asset,
   core_pipeline::{
     core_3d, fullscreen_vertex_shader::fullscreen_shader_vertex_state,
   },
@@ -25,7 +27,7 @@ use bevy::{
       FragmentState, MultisampleState, Operations, PipelineCache,
       PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
       RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor,
-      ShaderStages, ShaderType, TextureFormat, TextureSampleType,
+      Shader, ShaderStages, ShaderType, TextureFormat, TextureSampleType,
       TextureViewDimension,
     },
     renderer::{RenderContext, RenderDevice},
@@ -34,6 +36,9 @@ use bevy::{
     RenderApp,
   },
 };
+
+pub const PIXEL_CAM_SHADER_HANDLE: HandleUntyped =
+  HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 10389534959802286737);
 
 /// It is generally encouraged to set up post processing effects as a plugin
 pub struct PixelCamPlugin;
@@ -50,6 +55,16 @@ impl Plugin for PixelCamPlugin {
       // This plugin will prepare the component for the GPU by creating a uniform buffer
       // and writing the data to that buffer every frame.
       .add_plugin(UniformComponentPlugin::<PixelCamSettings>::default());
+      
+    // Load the shader and assign it its handle
+    // This method is used to make sure the shader is bundled with the app
+    // and not loaded at runtime.
+    load_internal_asset!(
+      app,
+      PIXEL_CAM_SHADER_HANDLE,
+      "shaders/pixel_cam_pass.wgsl",
+      Shader::from_wgsl
+    );
 
     // We need to get the render app from the main app
     let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
@@ -198,7 +213,7 @@ impl Node for PixelCamNode {
         .create_bind_group(&BindGroupDescriptor {
           label: Some("post_process_bind_group"),
           layout: &pixel_cam_pipeline.layout,
-          // It's important for this to match the BindGroupLayout defined in the PostProcessPipeline
+          // It's important for this to match the BindGroupLayout defined in the PixelCamPipeline
           entries: &[
             BindGroupEntry {
               binding: 0,
@@ -296,10 +311,10 @@ impl FromWorld for PixelCamPipeline {
     // We can create the sampler here since it won't change at runtime and doesn't depend on the view
     let sampler = render_device.create_sampler(&SamplerDescriptor::default());
 
-    // Get the shader handle
-    let shader = world
-      .resource::<AssetServer>()
-      .load("shaders/pixel_cam_pass.wgsl");
+    // // Get the shader handle
+    // let shader = world
+    //   .resource::<AssetServer>()
+    //   .load("shaders/pixel_cam_pass.wgsl");
 
     let pipeline_id = world
       .resource_mut::<PipelineCache>()
@@ -310,7 +325,7 @@ impl FromWorld for PixelCamPipeline {
         // This will setup a fullscreen triangle for the vertex state
         vertex: fullscreen_shader_vertex_state(),
         fragment: Some(FragmentState {
-          shader,
+          shader: PIXEL_CAM_SHADER_HANDLE.typed(),
           shader_defs: vec![],
           // Make sure this matches the entry point of your shader.
           // It can be anything as long as it matches here and in the shader.
@@ -340,5 +355,6 @@ impl FromWorld for PixelCamPipeline {
 // This is the component that will get passed to the shader
 #[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
 pub struct PixelCamSettings {
-  pub intensity: f32,
+	pub window_size: Vec2,
+  pub new_pixel_size: f32,
 }
