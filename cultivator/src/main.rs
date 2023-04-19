@@ -2,18 +2,21 @@ mod constants;
 mod hex;
 
 use constants::*;
-use hex::HexItem;
+use hex::item::HexItem;
+use hex::position::HexPosition;
 
 use bevy::{
   app::{App, PluginGroup},
   asset::{AssetServer, Assets, Handle},
-  core_pipeline::core_3d::Camera3dBundle,
+  core_pipeline::{
+    core_3d::Camera3dBundle,
+    tonemapping::{DebandDither, Tonemapping},
+  },
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin,
     LogDiagnosticsPlugin,
   },
   ecs::{
-    component::Component,
     query::With,
     system::{Commands, Query, Res, Resource},
     world::{FromWorld, World},
@@ -21,12 +24,12 @@ use bevy::{
   input::{keyboard::KeyCode, Input},
   math::{Quat, Vec3},
   pbr::{DirectionalLightBundle, PbrBundle, StandardMaterial},
+  prelude::Changed,
   render::{
     camera::{Camera, OrthographicProjection, Projection, ScalingMode},
-    mesh::{Indices, Mesh},
-    render_resource::PrimitiveTopology,
-    texture::{ImagePlugin},
-    view::Msaa,
+    mesh::Mesh,
+    texture::ImagePlugin,
+    view::{ColorGrading, Msaa},
   },
   time::Time,
   transform::components::Transform,
@@ -44,9 +47,6 @@ use hexx::*;
 use std::collections::HashMap;
 // for enum to vec
 use strum::IntoEnumIterator;
-
-#[derive(Component)]
-struct HexPosition(Hex);
 
 #[derive(Resource)]
 struct HexMaterials(HashMap<HexItem, Handle<StandardMaterial>>);
@@ -74,25 +74,10 @@ impl FromWorld for HexMeshes {
     let mut meshes = world.get_resource_mut::<Assets<Mesh>>().unwrap();
     let mut map = HashMap::new();
     for item in HexItem::iter() {
-      map.insert(item, meshes.add(build_hex_mesh(item.hex_height())));
+      map.insert(item, meshes.add(item.build_mesh()));
     }
     Self(map)
   }
-}
-
-fn build_hex_mesh(height: f32) -> Mesh {
-  let hex_layout = HexLayout {
-    hex_size: HEX_SIZE,
-    ..Default::default()
-  };
-  let mesh_info =
-    MeshInfo::partial_hexagonal_column(&hex_layout, Hex::ZERO, height);
-  let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-  mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, mesh_info.vertices.to_vec());
-  mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, mesh_info.normals.to_vec());
-  mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, mesh_info.uvs.to_vec());
-  mesh.set_indices(Some(Indices::U16(mesh_info.indices)));
-  mesh
 }
 
 fn build_hex_bundle(
@@ -118,7 +103,10 @@ fn build_hex_bundle(
       .looking_to(Vec3::Z, Vec3::Y),
       ..Default::default()
     },
-    HexPosition(*hex),
+    HexPosition {
+      pos: *hex,
+      ..Default::default()
+    },
     *grid_item,
   )
 }
@@ -145,12 +133,9 @@ fn build_test_grid(
   }
 }
 
-fn setup_graphics(
-  mut commands: Commands,
-  windows: Query<&Window>,
-) {
+fn setup_graphics(mut commands: Commands, windows: Query<&Window>) {
   let window = windows.iter().next().unwrap();
-  
+
   // spawn lighting
   commands.spawn(DirectionalLightBundle {
     transform: Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
@@ -173,11 +158,17 @@ fn setup_graphics(
         scaling_mode: ScalingMode::WindowSize(UNIT_TO_PIXEL),
         ..Default::default()
       }),
+      tonemapping: Tonemapping::None,
+      dither: DebandDither::Disabled,
+      color_grading: ColorGrading::default(),
       ..Default::default()
     },
     PixelCamSettings {
-      new_pixel_size: 2.0,
-      window_size: Vec2::new(window.width(), window.height())
+      new_pixel_size: 8.0,
+      sample_spread: 0.75,
+      dither_strength: 0.5,
+      n_colors: 10.0,
+      window_size: Vec2::new(window.width(), window.height()),
     },
   ));
 }
@@ -233,6 +224,18 @@ fn handle_camera_movement(
   }
 }
 
+fn maintain_pixel_cam_screen_resolution(
+  mut pixel_cam_settings: Query<&mut PixelCamSettings>,
+  windows: Query<&Window, Changed<Window>>,
+) {
+  let Some(window) = windows.iter().next() else {
+    return;
+  };
+  for mut pixel_cam_settings in pixel_cam_settings.iter_mut() {
+    pixel_cam_settings.window_size = Vec2::new(window.width(), window.height());
+  }
+}
+
 fn main() {
   App::new()
     // default plugins with no vsync
@@ -265,5 +268,7 @@ fn main() {
     .add_startup_system(build_test_grid)
     // handle input
     .add_system(handle_camera_movement)
+    // maintainers
+    .add_system(maintain_pixel_cam_screen_resolution)
     .run();
 }

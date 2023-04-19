@@ -55,7 +55,7 @@ impl Plugin for PixelCamPlugin {
       // This plugin will prepare the component for the GPU by creating a uniform buffer
       // and writing the data to that buffer every frame.
       .add_plugin(UniformComponentPlugin::<PixelCamSettings>::default());
-      
+
     // Load the shader and assign it its handle
     // This method is used to make sure the shader is bundled with the app
     // and not loaded at runtime.
@@ -165,8 +165,7 @@ impl Node for PixelCamNode {
     world: &World,
   ) -> Result<(), NodeRunError> {
     // Get the entity of the view for the render graph where this node is running
-    let view_entity =
-      graph_context.get_input_entity(PixelCamNode::IN_VIEW)?;
+    let view_entity = graph_context.get_input_entity(PixelCamNode::IN_VIEW)?;
 
     // We get the data we need from the world based on the view entity passed to the node.
     // The data is the query that was defined earlier in the [`PostProcessNode`]
@@ -223,9 +222,7 @@ impl Node for PixelCamNode {
             BindGroupEntry {
               binding: 1,
               // Use the sampler created for the pipeline
-              resource: BindingResource::Sampler(
-                &pixel_cam_pipeline.sampler,
-              ),
+              resource: BindingResource::Sampler(&pixel_cam_pipeline.sampler),
             },
             BindGroupEntry {
               binding: 2,
@@ -355,6 +352,9 @@ impl FromWorld for PixelCamPipeline {
 // This is the component that will get passed to the shader
 #[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
 pub struct PixelCamSettings {
-	pub window_size: Vec2,
+  pub window_size: Vec2,
   pub new_pixel_size: f32,
+  pub sample_spread: f32,
+  pub dither_strength: f32,
+  pub n_colors: f32,
 }
