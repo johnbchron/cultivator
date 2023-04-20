@@ -36,12 +36,9 @@ struct PixelCamSettings {
 @group(0) @binding(2)
 var<uniform> settings: PixelCamSettings;
 
-// source: line 267 of
-//  bevy/crates/bevy_core_pipeline/src/tonemapping/tonemapping_shared.wgsl
-fn screen_space_dither(frag_coord: vec2<f32>) -> vec3<f32> {
-  var dither = vec3<f32>(dot(vec2<f32>(171.0, 231.0), frag_coord)).xxx;
-  dither = fract(dither.rgb / vec3<f32>(103.0, 71.0, 97.0));
-  return (dither - 0.5) / 255.0;
+fn pixel_space_dither(frag_coord: vec2<f32>, pixel_size: f32) -> vec3<f32> {
+  let dither = ((floor(frag_coord.x % (2.0 * pixel_size)) + floor(frag_coord.y % (2.0 * pixel_size))) / pixel_size) % 2.0;
+  return vec3<f32>(dither, dither, dither) * 2.0 - 1.0;
 }
 
 @fragment
@@ -72,7 +69,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
   let pixel_color_br = textureSample(screen_texture, texture_sampler, vec2<f32>(sample_uv_r, sample_uv_b));
   
   let blended_color = (pixel_color_tl.rgb + pixel_color_tr.rgb + pixel_color_bl.rgb + pixel_color_br.rgb) / 4.0;
-  let dithered_color = (blended_color * (dither_strength * 255.0) + screen_space_dither(pixel_coords)) / (dither_strength * 255.0);
+  let dithered_color = blended_color + pixel_space_dither(pixel_coords, pixel_size) * dither_strength;
   
   let quantized_color = floor(dithered_color * n_colors + 0.5) / n_colors;
   

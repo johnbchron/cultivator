@@ -1,6 +1,7 @@
 mod constants;
 mod hex;
 
+use bevy::pbr::PointLight;
 use constants::*;
 use hex::item::HexItem;
 use hex::position::HexPosition;
@@ -23,7 +24,7 @@ use bevy::{
   },
   input::{keyboard::KeyCode, Input},
   math::{Quat, Vec3},
-  pbr::{DirectionalLightBundle, PbrBundle, StandardMaterial},
+  pbr::{DirectionalLightBundle, PointLightBundle, PbrBundle, StandardMaterial},
   prelude::Changed,
   render::{
     camera::{Camera, OrthographicProjection, Projection, ScalingMode},
@@ -142,8 +143,19 @@ fn setup_graphics(mut commands: Commands, windows: Query<&Window>) {
       .looking_to(Vec3::NEG_Y, Vec3::Z),
     ..default()
   });
+  commands.spawn(PointLightBundle {
+    transform: Transform::from_translation(Vec3::new(0.0, 20.0, 0.0)),
+    point_light: PointLight {
+      intensity: 2400.0,
+      range: 100.0,
+      ..Default::default()
+    },
+    ..default()
+  });
+
 
   let isometric_rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4);
+  let pixel_colors: f32 = 10.0;
 
   commands.spawn((
     Camera3dBundle {
@@ -166,8 +178,8 @@ fn setup_graphics(mut commands: Commands, windows: Query<&Window>) {
     PixelCamSettings {
       new_pixel_size: 8.0,
       sample_spread: 0.75,
-      dither_strength: 0.5,
-      n_colors: 10.0,
+      dither_strength: pixel_colors.recip() / 10.0,
+      n_colors: pixel_colors,
       window_size: Vec2::new(window.width(), window.height()),
     },
   ));
