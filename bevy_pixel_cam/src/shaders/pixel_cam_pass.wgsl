@@ -31,7 +31,6 @@ struct PixelCamSettings {
   new_pixel_size: f32,
   sample_spread: f32,
   dither_strength: f32,
-  n_colors: f32,
 }
 @group(0) @binding(2)
 var<uniform> settings: PixelCamSettings;
@@ -47,10 +46,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
   let pixel_size = settings.new_pixel_size;
   // when sample_spread is 0, samples are placed at the corners of the pixel
   // when sample_spread is 1, samples are placed at the center of the pixel
-  let sample_spread = settings.sample_spread;
+  let sample_spread = max(min(settings.sample_spread, 1.0), 0.0);
   // dither strength from 0 to 1
   let dither_strength = settings.dither_strength;
-  let n_colors = settings.n_colors;
   
   let pixel_uv_l = floor(in.uv.x * screen_size.x / pixel_size) * pixel_size / screen_size.x;
   let pixel_uv_r = ceil(in.uv.x * screen_size.x / pixel_size) * pixel_size / screen_size.x;
@@ -71,7 +69,5 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
   let blended_color = (pixel_color_tl.rgb + pixel_color_tr.rgb + pixel_color_bl.rgb + pixel_color_br.rgb) / 4.0;
   let dithered_color = blended_color + pixel_space_dither(pixel_coords, pixel_size) * dither_strength;
   
-  let quantized_color = floor(dithered_color * n_colors + 0.5) / n_colors;
-  
-  return vec4<f32>(quantized_color, 1.0);
+  return vec4<f32>(dithered_color, 1.0);
 }

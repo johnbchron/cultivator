@@ -1,14 +1,13 @@
 mod constants;
 mod hex;
 
-use bevy::pbr::PointLight;
 use constants::*;
 use hex::item::HexItem;
 use hex::position::HexPosition;
 
 use bevy::{
   app::{App, PluginGroup},
-  asset::{AssetServer, Assets, Handle},
+  asset::{AddAsset, AssetServer, Assets, Handle},
   core_pipeline::{
     core_3d::Camera3dBundle,
     tonemapping::{DebandDither, Tonemapping},
@@ -24,8 +23,10 @@ use bevy::{
   },
   input::{keyboard::KeyCode, Input},
   math::{Quat, Vec3},
-  pbr::{DirectionalLightBundle, PointLightBundle, PbrBundle, StandardMaterial},
-  prelude::Changed,
+  pbr::{
+    DirectionalLightBundle, PbrBundle, PointLight, PointLightBundle,
+  },
+  prelude::{Changed, MaterialMeshBundle, MaterialPlugin},
   render::{
     camera::{Camera, OrthographicProjection, Projection, ScalingMode},
     mesh::Mesh,
@@ -41,7 +42,10 @@ use bevy::{
 use bevy_diagnostic_vertex_count::{
   VertexCountDiagnosticsPlugin, VertexCountDiagnosticsSettings,
 };
-use bevy_pixel_cam::{PixelCamPlugin, PixelCamSettings};
+use bevy_pixel_cam::{
+  post_process::{PixelCamPlugin, PixelCamSettings},
+  material::{PixelMaterial, PixelMaterialPlugin},
+};
 
 use hexx::*;
 
@@ -50,7 +54,7 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 #[derive(Resource)]
-struct HexMaterials(HashMap<HexItem, Handle<StandardMaterial>>);
+struct HexMaterials(HashMap<HexItem, Handle<PixelMaterial>>);
 
 #[derive(Resource)]
 struct HexMeshes(HashMap<HexItem, Handle<Mesh>>);
@@ -61,9 +65,11 @@ impl FromWorld for HexMaterials {
     for item in HexItem::iter() {
       let asset_server = world.get_resource::<AssetServer>().unwrap();
       let material = item.build_material(asset_server);
+      // get the pixelmaterial asset resource or add it if it doesn't exist
       let mut materials = world
-        .get_resource_mut::<Assets<StandardMaterial>>()
+        .get_resource_mut::<Assets<PixelMaterial>>()
         .unwrap();
+      
       map.insert(item, materials.add(material));
     }
     Self(map)
@@ -86,7 +92,7 @@ fn build_hex_bundle(
   hex: &Hex,
   hex_materials: &HexMaterials,
   hex_meshes: &HexMeshes,
-) -> (PbrBundle, HexPosition, HexItem) {
+) -> (MaterialMeshBundle<PixelMaterial>, HexPosition, HexItem) {
   let hex_layout = HexLayout {
     hex_size: HEX_SIZE,
     ..Default::default()
@@ -95,7 +101,7 @@ fn build_hex_bundle(
   let material = hex_materials.0.get(grid_item).unwrap();
   let mesh = hex_meshes.0.get(grid_item).unwrap();
   (
-    PbrBundle {
+    MaterialMeshBundle {
       mesh: mesh.clone(),
       material: material.clone(),
       transform: Transform::from_translation(Vec3::new(
@@ -153,9 +159,7 @@ fn setup_graphics(mut commands: Commands, windows: Query<&Window>) {
     ..default()
   });
 
-
   let isometric_rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4);
-  let pixel_colors: f32 = 10.0;
 
   commands.spawn((
     Camera3dBundle {
@@ -170,7 +174,7 @@ fn setup_graphics(mut commands: Commands, windows: Query<&Window>) {
         scaling_mode: ScalingMode::WindowSize(UNIT_TO_PIXEL),
         ..Default::default()
       }),
-      tonemapping: Tonemapping::None,
+      tonemapping: Tonemapping::default(),
       dither: DebandDither::Disabled,
       color_grading: ColorGrading::default(),
       ..Default::default()
@@ -178,8 +182,7 @@ fn setup_graphics(mut commands: Commands, windows: Query<&Window>) {
     PixelCamSettings {
       new_pixel_size: 8.0,
       sample_spread: 0.75,
-      dither_strength: pixel_colors.recip() / 10.0,
-      n_colors: pixel_colors,
+      dither_strength: 0.001,
       window_size: Vec2::new(window.width(), window.height()),
     },
   ));
@@ -264,7 +267,9 @@ fn main() {
     )
     // graphics config
     .insert_resource(Msaa::Off)
-    .add_plugin(PixelCamPlugin)
+    // .add_plugin(PixelCamPlugin)
+    .add_plugin(PixelMaterialPlugin)
+    .add_plugin(MaterialPlugin::<PixelMaterial>::default())
     // diagnostic config
     .add_plugin(LogDiagnosticsPlugin::default())
     .add_plugin(FrameTimeDiagnosticsPlugin::default())
@@ -272,6 +277,7 @@ fn main() {
     .insert_resource(VertexCountDiagnosticsSettings { only_visible: true })
     .add_plugin(VertexCountDiagnosticsPlugin::default())
     // prebuild meshes and materials
+    .add_asset::<PixelMaterial>()
     .init_resource::<HexMaterials>()
     .init_resource::<HexMeshes>()
     // setup graphics
