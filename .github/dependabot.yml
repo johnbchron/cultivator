@@ -6,8 +6,10 @@
 version: 2
 updates:
   - package-ecosystem: "cargo" # See documentation for possible values
-    directory:  # Location of package manifests
-      - "/cultivator"
-      - "/bevy_pixel_cam"
+    directory: "/bevy_pixel_cam" # Location of package manifests
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "cargo" # See documentation for possible values
+    directory: "/cultivator" # Location of package manifests
     schedule:
       interval: "weekly"
