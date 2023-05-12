@@ -1,11 +1,12 @@
 use crate::constants::*;
 
 use hexx::*;
-use bevy_pixel_cam::material::PixelMaterial;
+// use bevy_pixel_cam::material::PixelMaterial;
 
 use bevy::asset::AssetServer;
 use bevy::asset::Handle;
 use bevy::ecs::component::Component;
+use bevy::pbr::StandardMaterial;
 use bevy::render::color::Color;
 use bevy::render::mesh::Indices;
 use bevy::render::mesh::Mesh;
@@ -67,25 +68,26 @@ impl HexItem {
     }
   }
 
-  pub fn build_material(&self, asset_server: &AssetServer) -> PixelMaterial {
-    PixelMaterial {
-      color: self.base_color(),
-      // base_color_texture: match self.load_texture(asset_server) {
-      //   Some(texture) => Some(texture),
-      //   None => StandardMaterial::default().base_color_texture,
-      // },
-      // metallic: match self {
-      //   Self::Dirt => 0.0,
-      //   Self::Grass => 0.0,
-      //   Self::Stone => 0.5,
-      //   Self::Cobblestone => 0.5,
-      // },
-      // perceptual_roughness: match self {
-      //   Self::Dirt => 0.8,
-      //   Self::Grass => 0.8,
-      //   Self::Stone => 0.4,
-      //   Self::Cobblestone => 0.5,
-      // },
+  pub fn build_material(&self, asset_server: &AssetServer) -> StandardMaterial {
+    StandardMaterial {
+      base_color: self.base_color(),
+      
+      base_color_texture: match self.load_texture(asset_server) {
+        Some(texture) => Some(texture),
+        None => StandardMaterial::default().base_color_texture,
+      },
+      metallic: match self {
+        Self::Dirt => 0.0,
+        Self::Grass => 0.0,
+        Self::Stone => 0.5,
+        Self::Cobblestone => 0.5,
+      },
+      perceptual_roughness: match self {
+        Self::Dirt => 0.8,
+        Self::Grass => 0.8,
+        Self::Stone => 0.4,
+        Self::Cobblestone => 0.5,
+      },
       // reflectance: ??,
       ..Default::default()
     }

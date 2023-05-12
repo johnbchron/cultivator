@@ -11,6 +11,7 @@ use bevy::{
   core_pipeline::{
     core_3d::Camera3dBundle,
     tonemapping::{DebandDither, Tonemapping},
+    prepass::{DepthPrepass, NormalPrepass}
   },
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin,
@@ -23,10 +24,8 @@ use bevy::{
   },
   input::{keyboard::KeyCode, Input},
   math::{Quat, Vec3},
-  pbr::{
-    DirectionalLightBundle, PbrBundle, PointLight, PointLightBundle,
-  },
-  prelude::{Changed, MaterialMeshBundle, MaterialPlugin},
+  pbr::{DirectionalLightBundle, PbrBundle, PointLight, PointLightBundle},
+  prelude::{Changed, MaterialMeshBundle, MaterialPlugin, StandardMaterial},
   render::{
     camera::{Camera, OrthographicProjection, Projection, ScalingMode},
     mesh::Mesh,
@@ -43,8 +42,8 @@ use bevy_diagnostic_vertex_count::{
   VertexCountDiagnosticsPlugin, VertexCountDiagnosticsSettings,
 };
 use bevy_pixel_cam::{
-  post_process::{PixelCamPlugin, PixelCamSettings},
   material::{PixelMaterial, PixelMaterialPlugin},
+  post_process::{PixelCamPlugin, PixelCamSettings},
 };
 
 use hexx::*;
@@ -54,7 +53,7 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 #[derive(Resource)]
-struct HexMaterials(HashMap<HexItem, Handle<PixelMaterial>>);
+struct HexMaterials(HashMap<HexItem, Handle<StandardMaterial>>);
 
 #[derive(Resource)]
 struct HexMeshes(HashMap<HexItem, Handle<Mesh>>);
@@ -65,11 +64,10 @@ impl FromWorld for HexMaterials {
     for item in HexItem::iter() {
       let asset_server = world.get_resource::<AssetServer>().unwrap();
       let material = item.build_material(asset_server);
-      // get the pixelmaterial asset resource or add it if it doesn't exist
-      let mut materials = world
-        .get_resource_mut::<Assets<PixelMaterial>>()
-        .unwrap();
-      
+      // get the material asset resource or add it if it doesn't exist
+      let mut materials =
+        world.get_resource_mut::<Assets<StandardMaterial>>().unwrap();
+
       map.insert(item, materials.add(material));
     }
     Self(map)
@@ -92,7 +90,7 @@ fn build_hex_bundle(
   hex: &Hex,
   hex_materials: &HexMaterials,
   hex_meshes: &HexMeshes,
-) -> (MaterialMeshBundle<PixelMaterial>, HexPosition, HexItem) {
+) -> (MaterialMeshBundle<StandardMaterial>, HexPosition, HexItem) {
   let hex_layout = HexLayout {
     hex_size: HEX_SIZE,
     ..Default::default()
@@ -140,9 +138,7 @@ fn build_test_grid(
   }
 }
 
-fn setup_graphics(mut commands: Commands, windows: Query<&Window>) {
-  let window = windows.iter().next().unwrap();
-
+fn setup_graphics(mut commands: Commands) {
   // spawn lighting
   commands.spawn(DirectionalLightBundle {
     transform: Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
@@ -167,33 +163,30 @@ fn setup_graphics(mut commands: Commands, windows: Query<&Window>) {
         .with_rotation(isometric_rotation)
         .with_translation(Vec3::new(
           0.0,
-          500.0 + 20.0 + HEX_HEIGHT,
-          500.0 + 20.0,
+          10.0 + HEX_HEIGHT,
+          10.0,
         )),
-      projection: Projection::Orthographic(OrthographicProjection {
-        scaling_mode: ScalingMode::WindowSize(UNIT_TO_PIXEL),
-        ..Default::default()
-      }),
+      // projection: Projection::Orthographic(OrthographicProjection {
+      //   scaling_mode: ScalingMode::WindowSize(UNIT_TO_PIXEL),
+      //   ..Default::default()
+      // }),
       tonemapping: Tonemapping::default(),
       dither: DebandDither::Disabled,
       color_grading: ColorGrading::default(),
       ..Default::default()
     },
-    PixelCamSettings {
-      new_pixel_size: 8.0,
-      sample_spread: 0.75,
-      dither_strength: 0.001,
-      window_size: Vec2::new(window.width(), window.height()),
-    },
+    PixelCamSettings::new(8.0, 0.5, 0.001),
+    DepthPrepass,
+    NormalPrepass,
   ));
 }
 
 fn handle_camera_movement(
-  mut query: Query<(&mut Transform, &mut Projection), With<Camera>>,
+  mut query: Query<(&mut Transform, &mut Projection, &mut PixelCamSettings), With<Camera>>,
   time: Res<Time>,
   keyboard_input: Res<Input<KeyCode>>,
 ) {
-  for (mut transform, projection) in query.iter_mut() {
+  for (mut transform, projection, mut pixel_cam_settings) in query.iter_mut() {
     let mut delta = Vec3::ZERO;
     if keyboard_input.pressed(KeyCode::A) {
       delta.x -= 1.0;
@@ -206,6 +199,11 @@ fn handle_camera_movement(
     }
     if keyboard_input.pressed(KeyCode::S) {
       delta.z += 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::Up) {
+      pixel_cam_settings.new_pixel_size -= 0.1;
+    } else if keyboard_input.pressed(KeyCode::Down) {
+      pixel_cam_settings.new_pixel_size += 0.1;
     }
     if keyboard_input.pressed(KeyCode::Q) || keyboard_input.pressed(KeyCode::E)
     {
@@ -239,18 +237,6 @@ fn handle_camera_movement(
   }
 }
 
-fn maintain_pixel_cam_screen_resolution(
-  mut pixel_cam_settings: Query<&mut PixelCamSettings>,
-  windows: Query<&Window, Changed<Window>>,
-) {
-  let Some(window) = windows.iter().next() else {
-    return;
-  };
-  for mut pixel_cam_settings in pixel_cam_settings.iter_mut() {
-    pixel_cam_settings.window_size = Vec2::new(window.width(), window.height());
-  }
-}
-
 fn main() {
   App::new()
     // default plugins with no vsync
@@ -267,8 +253,8 @@ fn main() {
     )
     // graphics config
     .insert_resource(Msaa::Off)
-    // .add_plugin(PixelCamPlugin)
-    .add_plugin(PixelMaterialPlugin)
+    .add_plugin(PixelCamPlugin)
+    // .add_plugin(PixelMaterialPlugin)
     .add_plugin(MaterialPlugin::<PixelMaterial>::default())
     // diagnostic config
     .add_plugin(LogDiagnosticsPlugin::default())
@@ -287,6 +273,5 @@ fn main() {
     // handle input
     .add_system(handle_camera_movement)
     // maintainers
-    .add_system(maintain_pixel_cam_screen_resolution)
     .run();
 }

@@ -3,7 +3,9 @@ use bevy::{
   asset::load_internal_asset,
   core_pipeline::{
     core_3d, fullscreen_vertex_shader::fullscreen_shader_vertex_state,
+    prepass::ViewPrepassTextures
   },
+  pbr::{MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS},
   prelude::*,
   render::{
     extract_component::{
@@ -20,12 +22,12 @@ use bevy::{
       FragmentState, MultisampleState, Operations, PipelineCache,
       PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
       RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor,
-      Shader, ShaderStages, ShaderType, TextureFormat, TextureSampleType,
-      TextureViewDimension,
+      Shader, ShaderDefVal, ShaderStages, ShaderType, TextureFormat, TextureSampleType,
+      TextureViewDimension, BufferBindingType
     },
     renderer::{RenderContext, RenderDevice},
     texture::BevyDefault,
-    view::{ExtractedView, ViewTarget},
+    view::{ExtractedView, ViewTarget, ViewUniformOffset, ViewUniforms, ViewUniform},
     RenderApp,
   },
 };
@@ -47,7 +49,8 @@ impl Plugin for PixelCamPlugin {
       // The settings will also be the data used in the shader.
       // This plugin will prepare the component for the GPU by creating a uniform buffer
       // and writing the data to that buffer every frame.
-      .add_plugin(UniformComponentPlugin::<PixelCamSettings>::default());
+      .add_plugin(UniformComponentPlugin::<PixelCamSettings>::default())
+      .add_system(maintain_pixel_cam_screen_resolution);
 
     // Load the shader and assign it its handle
     // This method is used to make sure the shader is bundled with the app
@@ -114,7 +117,14 @@ impl Plugin for PixelCamPlugin {
 struct PixelCamNode {
   // The node needs a query to gather data from the ECS in order to do its rendering,
   // but it's not a normal system so we need to define it manually.
-  query: QueryState<&'static ViewTarget, With<ExtractedView>>,
+  query: QueryState<
+    (
+      &'static ViewUniformOffset,
+      &'static ViewTarget,
+      &'static ViewPrepassTextures,
+    ),
+    With<ExtractedView>
+  >,
 }
 
 impl PixelCamNode {
@@ -159,10 +169,12 @@ impl Node for PixelCamNode {
   ) -> Result<(), NodeRunError> {
     // Get the entity of the view for the render graph where this node is running
     let view_entity = graph_context.get_input_entity(PixelCamNode::IN_VIEW)?;
+    let view_uniforms = world.resource::<ViewUniforms>();
+    let view_uniforms = view_uniforms.uniforms.binding().unwrap();
 
     // We get the data we need from the world based on the view entity passed to the node.
     // The data is the query that was defined earlier in the [`PostProcessNode`]
-    let Ok(view_target) = self.query.get_manual(world, view_entity) else {
+    let Ok((view_uniform_offset, view_target, prepass_textures)) = self.query.get_manual(world, view_entity) else {
 			return Ok(());
 		};
 
@@ -199,31 +211,49 @@ impl Node for PixelCamNode {
     // Normally, you would create a bind_group in the Queue stage, but this doesn't work with the post_process_write().
     // The reason it doesn't work is because each post_process_write will alternate the source/destination.
     // The only way to have the correct source/destination for the bind_group is to make sure you get it during the node execution.
-    let bind_group =
-      render_context
-        .render_device()
-        .create_bind_group(&BindGroupDescriptor {
-          label: Some("post_process_bind_group"),
-          layout: &pixel_cam_pipeline.layout,
-          // It's important for this to match the BindGroupLayout defined in the PixelCamPipeline
-          entries: &[
-            BindGroupEntry {
-              binding: 0,
-              // Make sure to use the source view
-              resource: BindingResource::TextureView(post_process.source),
-            },
-            BindGroupEntry {
-              binding: 1,
-              // Use the sampler created for the pipeline
-              resource: BindingResource::Sampler(&pixel_cam_pipeline.sampler),
-            },
-            BindGroupEntry {
-              binding: 2,
-              // Set the settings binding
-              resource: settings_binding.clone(),
-            },
-          ],
-        });
+    let bind_group = render_context
+      .render_device()
+      .create_bind_group(&BindGroupDescriptor {
+        label: Some("post_process_bind_group"),
+        layout: &pixel_cam_pipeline.layout,
+        // It's important for this to match the BindGroupLayout defined in the PixelCamPipeline
+        entries: &[
+          BindGroupEntry {
+            binding: 0,
+            // Use the view uniform buffer
+            resource: view_uniforms.clone(),
+          },
+          BindGroupEntry {
+            binding: 1,
+            // Make sure to use the source view
+            resource: BindingResource::TextureView(post_process.source),
+          },
+          BindGroupEntry {
+            binding: 2,
+            // Use the sampler created for the pipeline
+            resource: BindingResource::Sampler(&pixel_cam_pipeline.sampler),
+          },
+          BindGroupEntry {
+            binding: 3,
+            // Set the settings binding
+            resource: settings_binding.clone(),
+          },
+          BindGroupEntry {
+            binding: 4,
+            // Use the depth texture view from the prepass
+            resource: BindingResource::TextureView(
+              &prepass_textures.depth.clone().unwrap().default_view,
+            ),
+          },
+          BindGroupEntry {
+            binding: 5,
+            // Use the normal texture view from the prepass
+            resource: BindingResource::TextureView(
+              &prepass_textures.normal.clone().unwrap().default_view,
+            ),
+          },
+        ],
+      });
 
     // Begin the render pass
     let mut render_pass =
@@ -242,7 +272,7 @@ impl Node for PixelCamNode {
     // This is mostly just wgpu boilerplate for drawing a fullscreen triangle,
     // using the pipeline/bind_group created above
     render_pass.set_render_pipeline(pipeline);
-    render_pass.set_bind_group(0, &bind_group, &[]);
+    render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
     render_pass.draw(0..3, 0..1);
 
     Ok(())
@@ -266,9 +296,21 @@ impl FromWorld for PixelCamPipeline {
       render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: Some("pixel_cam_bind_group_layout"),
         entries: &[
-          // The screen texture
           BindGroupLayoutEntry {
             binding: 0,
+            visibility: ShaderStages::VERTEX
+              | ShaderStages::FRAGMENT
+              | ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+              ty: BufferBindingType::Uniform,
+              has_dynamic_offset: true,
+              min_binding_size: Some(ViewUniform::min_size()),
+            },
+            count: None,
+          },
+          // The screen texture
+          BindGroupLayoutEntry {
+            binding: 1,
             visibility: ShaderStages::FRAGMENT,
             ty: BindingType::Texture {
               sample_type: TextureSampleType::Float { filterable: true },
@@ -279,14 +321,14 @@ impl FromWorld for PixelCamPipeline {
           },
           // The sampler that will be used to sample the screen texture
           BindGroupLayoutEntry {
-            binding: 1,
+            binding: 2,
             visibility: ShaderStages::FRAGMENT,
             ty: BindingType::Sampler(SamplerBindingType::Filtering),
             count: None,
           },
           // The settings uniform that will control the effect
           BindGroupLayoutEntry {
-            binding: 2,
+            binding: 3,
             visibility: ShaderStages::FRAGMENT,
             ty: BindingType::Buffer {
               ty: bevy::render::render_resource::BufferBindingType::Uniform,
@@ -295,11 +337,42 @@ impl FromWorld for PixelCamPipeline {
             },
             count: None,
           },
+          BindGroupLayoutEntry {
+            binding: 4,
+            visibility: ShaderStages::FRAGMENT,
+            ty: BindingType::Texture {
+              multisampled: false,
+              sample_type: TextureSampleType::Depth,
+              view_dimension: TextureViewDimension::D2,
+            },
+            count: None,
+          },
+          // Normal texture
+          BindGroupLayoutEntry {
+            binding: 5,
+            visibility: ShaderStages::FRAGMENT,
+            ty: BindingType::Texture {
+              multisampled: false,
+              sample_type: TextureSampleType::Float { filterable: true },
+              view_dimension: TextureViewDimension::D2,
+            },
+            count: None,
+          },
         ],
       });
 
     // We can create the sampler here since it won't change at runtime and doesn't depend on the view
     let sampler = render_device.create_sampler(&SamplerDescriptor::default());
+
+    let mut shader_defs = Vec::new();
+    shader_defs.push(ShaderDefVal::UInt(
+      "MAX_DIRECTIONAL_LIGHTS".to_string(),
+      MAX_DIRECTIONAL_LIGHTS as u32,
+    ));
+    shader_defs.push(ShaderDefVal::UInt(
+      "MAX_CASCADES_PER_LIGHT".to_string(),
+      MAX_CASCADES_PER_LIGHT as u32,
+    ));
 
     // // Get the shader handle
     // let shader = world
@@ -316,7 +389,7 @@ impl FromWorld for PixelCamPipeline {
         vertex: fullscreen_shader_vertex_state(),
         fragment: Some(FragmentState {
           shader: PIXEL_CAM_SHADER_HANDLE.typed(),
-          shader_defs: vec![],
+          shader_defs: shader_defs,
           // Make sure this matches the entry point of your shader.
           // It can be anything as long as it matches here and in the shader.
           entry_point: "fragment".into(),
@@ -345,8 +418,31 @@ impl FromWorld for PixelCamPipeline {
 // This is the component that will get passed to the shader
 #[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
 pub struct PixelCamSettings {
-  pub window_size: Vec2,
+  window_size: Vec2,
   pub new_pixel_size: f32,
   pub sample_spread: f32,
   pub dither_strength: f32,
+}
+
+impl PixelCamSettings {
+  pub fn new(new_pixel_size: f32, sample_spread: f32, dither_strength: f32) -> Self {
+    Self {
+      window_size: Vec2::new(0.0, 0.0),
+      new_pixel_size,
+      sample_spread,
+      dither_strength,
+    }
+  }
+}
+
+fn maintain_pixel_cam_screen_resolution(
+  mut pixel_cam_settings: Query<&mut PixelCamSettings>,
+  windows: Query<&Window, Changed<Window>>,
+) {
+  let Some(window) = windows.iter().next() else {
+    return;
+  };
+  for mut pixel_cam_settings in pixel_cam_settings.iter_mut() {
+    pixel_cam_settings.window_size = Vec2::new(window.width(), window.height());
+  }
 }
