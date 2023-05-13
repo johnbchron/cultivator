@@ -40,10 +40,7 @@ use bevy::{
 use bevy_diagnostic_vertex_count::{
   VertexCountDiagnosticsPlugin, VertexCountDiagnosticsSettings,
 };
-use bevy_pixel_cam::{
-  material::{PixelMaterial},
-  post_process::{PixelCamPlugin, PixelCamSettings, PixelCamBundle},
-};
+use bevy_pixel_cam::{PixelCamPlugin, PixelCamSettings, PixelCamBundle};
 
 use hexx::*;
 
@@ -252,8 +249,6 @@ fn main() {
     // graphics config
     .insert_resource(Msaa::Off)
     .add_plugin(PixelCamPlugin)
-    // .add_plugin(PixelMaterialPlugin)
-    .add_plugin(MaterialPlugin::<PixelMaterial>::default())
     // diagnostic config
     .add_plugin(LogDiagnosticsPlugin::default())
     .add_plugin(FrameTimeDiagnosticsPlugin::default())
@@ -261,7 +256,6 @@ fn main() {
     .insert_resource(VertexCountDiagnosticsSettings { only_visible: true })
     .add_plugin(VertexCountDiagnosticsPlugin::default())
     // prebuild meshes and materials
-    .add_asset::<PixelMaterial>()
     .init_resource::<HexMaterials>()
     .init_resource::<HexMeshes>()
     // setup graphics

@@ -1,7 +1,6 @@
 use crate::constants::*;
 
 use hexx::*;
-// use bevy_pixel_cam::material::PixelMaterial;
 
 use bevy::asset::AssetServer;
 use bevy::asset::Handle;
