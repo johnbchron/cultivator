@@ -1,3 +1,4 @@
+use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::reflect::TypeUuid;
 use bevy::{
   asset::load_internal_asset,
@@ -245,13 +246,13 @@ impl Node for PixelCamNode {
               &prepass_textures.depth.clone().unwrap().default_view,
             ),
           },
-          BindGroupEntry {
-            binding: 5,
-            // Use the normal texture view from the prepass
-            resource: BindingResource::TextureView(
-              &prepass_textures.normal.clone().unwrap().default_view,
-            ),
-          },
+          // BindGroupEntry {
+          //   binding: 5,
+          //   // Use the normal texture view from the prepass
+          //   resource: BindingResource::TextureView(
+          //     &prepass_textures.normal.clone().unwrap().default_view,
+          //   ),
+          // },
         ],
       });
 
@@ -347,17 +348,17 @@ impl FromWorld for PixelCamPipeline {
             },
             count: None,
           },
-          // Normal texture
-          BindGroupLayoutEntry {
-            binding: 5,
-            visibility: ShaderStages::FRAGMENT,
-            ty: BindingType::Texture {
-              multisampled: false,
-              sample_type: TextureSampleType::Float { filterable: true },
-              view_dimension: TextureViewDimension::D2,
-            },
-            count: None,
-          },
+          // // Normal texture
+          // BindGroupLayoutEntry {
+          //   binding: 5,
+          //   visibility: ShaderStages::FRAGMENT,
+          //   ty: BindingType::Texture {
+          //     multisampled: false,
+          //     sample_type: TextureSampleType::Float { filterable: true },
+          //     view_dimension: TextureViewDimension::D2,
+          //   },
+          //   count: None,
+          // },
         ],
       });
 
@@ -416,23 +417,35 @@ impl FromWorld for PixelCamPipeline {
 }
 
 // This is the component that will get passed to the shader
-#[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
+#[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
 pub struct PixelCamSettings {
   window_size: Vec2,
   pub new_pixel_size: f32,
-  pub sample_spread: f32,
-  pub dither_strength: f32,
+  pub artificial_near_field: f32,
+  pub decay_rate: f32,
 }
 
 impl PixelCamSettings {
-  pub fn new(new_pixel_size: f32, sample_spread: f32, dither_strength: f32) -> Self {
+  pub fn new(new_pixel_size: f32, artificial_near_field: f32, decay_rate: f32) -> Self {
     Self {
       window_size: Vec2::new(0.0, 0.0),
       new_pixel_size,
-      sample_spread,
-      dither_strength,
+      artificial_near_field,
+      decay_rate,
     }
   }
+}
+
+impl Default for PixelCamSettings {
+  fn default() -> Self {
+    Self::new(30.0, 2.0, 0.5)
+  }
+}
+
+#[derive(Bundle, Default)]
+pub struct PixelCamBundle {
+  pub settings: PixelCamSettings,
+  depth_prepass: DepthPrepass,
 }
 
 fn maintain_pixel_cam_screen_resolution(

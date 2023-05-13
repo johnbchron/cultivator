@@ -11,7 +11,6 @@ use bevy::{
   core_pipeline::{
     core_3d::Camera3dBundle,
     tonemapping::{DebandDither, Tonemapping},
-    prepass::{DepthPrepass, NormalPrepass}
   },
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin,
@@ -24,10 +23,10 @@ use bevy::{
   },
   input::{keyboard::KeyCode, Input},
   math::{Quat, Vec3},
-  pbr::{DirectionalLightBundle, PbrBundle, PointLight, PointLightBundle},
-  prelude::{Changed, MaterialMeshBundle, MaterialPlugin, StandardMaterial},
+  pbr::{DirectionalLightBundle, PointLight, PointLightBundle},
+  prelude::{MaterialMeshBundle, MaterialPlugin, StandardMaterial},
   render::{
-    camera::{Camera, OrthographicProjection, Projection, ScalingMode},
+    camera::{Camera, Projection},
     mesh::Mesh,
     texture::ImagePlugin,
     view::{ColorGrading, Msaa},
@@ -42,8 +41,8 @@ use bevy_diagnostic_vertex_count::{
   VertexCountDiagnosticsPlugin, VertexCountDiagnosticsSettings,
 };
 use bevy_pixel_cam::{
-  material::{PixelMaterial, PixelMaterialPlugin},
-  post_process::{PixelCamPlugin, PixelCamSettings},
+  material::{PixelMaterial},
+  post_process::{PixelCamPlugin, PixelCamSettings, PixelCamBundle},
 };
 
 use hexx::*;
@@ -141,8 +140,9 @@ fn build_test_grid(
 fn setup_graphics(mut commands: Commands) {
   // spawn lighting
   commands.spawn(DirectionalLightBundle {
-    transform: Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
-      .looking_to(Vec3::NEG_Y, Vec3::Z),
+    // rotate 45 degrees around the x axis and 45 degrees around the z axis
+    transform: Transform::from_rotation(Quat::from_rotation_x(-0.5 * std::f32::consts::PI))
+      * Transform::from_rotation(Quat::from_rotation_z(-0.25 * std::f32::consts::PI)),
     ..default()
   });
   commands.spawn(PointLightBundle {
@@ -155,7 +155,7 @@ fn setup_graphics(mut commands: Commands) {
     ..default()
   });
 
-  let isometric_rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4);
+  let isometric_rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_8);
 
   commands.spawn((
     Camera3dBundle {
@@ -175,9 +175,7 @@ fn setup_graphics(mut commands: Commands) {
       color_grading: ColorGrading::default(),
       ..Default::default()
     },
-    PixelCamSettings::new(8.0, 0.5, 0.001),
-    DepthPrepass,
-    NormalPrepass,
+    PixelCamBundle::default(),
   ));
 }
 
