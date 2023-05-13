@@ -22,12 +22,10 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader
 struct PixelCamSettings {
   window_size: vec2<f32>,
-  new_pixel_size: f32,
+  max_pixel_size: f32,
   artificial_near_field: f32,
   decay_rate: f32,
 }
-const PIXEL_NEAR_FIELD: f32 = 2.0;
-const DECAY_RATE: f32 = 0.5;
 @group(0) @binding(0)
 var<uniform> view: View;
 @group(0) @binding(1)
@@ -54,31 +52,19 @@ fn linear_depth_at_uv(in: FullscreenVertexOutput) -> f32 {
 
 fn pixel_size_from_depth(in: FullscreenVertexOutput, template_pixel_size: f32) -> f32 {
   let linear_depth = linear_depth_at_uv(in);
-  if (linear_depth < PIXEL_NEAR_FIELD) {
+  if (linear_depth < settings.artificial_near_field) {
     return template_pixel_size;
   }
-  let unstepped_pixel_size = 1.0 / (DECAY_RATE * linear_depth + 1.0 - PIXEL_NEAR_FIELD);
-  return ceil(unstepped_pixel_size * template_pixel_size);
+  let unstepped_pixel_size = 1.0 / (settings.decay_rate * linear_depth + 1.0 - settings.artificial_near_field);
+  return ceil(unstepped_pixel_size * ceil(abs(template_pixel_size)));
 }
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
   let screen_size = settings.window_size;
-  let template_pixel_size = ceil(abs(settings.new_pixel_size));
-  let current_pixel_size = pixel_size_from_depth(in, template_pixel_size);
+  let current_pixel_size = pixel_size_from_depth(in, settings.max_pixel_size);
   
   var result_color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
-
-  // // Sample the screen texture in a grid of pixels
-  // for (var x = -1.0; x <= 1.0; x += 0.5) {
-  //  for (var y = -1.0; y <= 1.0; y += 0.5) {
-  //    let offset = vec2<f32>(x, y) * current_pixel_size * 4.0;
-  //    let uv = stepped_uv_coords_from_screenspace_origin(in, current_pixel_size, offset);
-  //    let sample = textureSample(screen_texture, texture_sampler, uv);
-  //    result_color += sample.rgb;
-  //  }
-  // }
-  // result_color /= 25.0;
   
   let sample_uv = stepped_uv_coords_from_screenspace_origin(in, current_pixel_size, vec2<f32>(0.0, 0.0));
   result_color = textureSample(screen_texture, texture_sampler, sample_uv).rgb;

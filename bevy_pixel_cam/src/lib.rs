@@ -36,21 +36,15 @@ use bevy::{
 pub const PIXEL_CAM_SHADER_HANDLE: HandleUntyped =
   HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 10389534959802286737);
 
-/// It is generally encouraged to set up post processing effects as a plugin
 pub struct PixelCamPlugin;
 impl Plugin for PixelCamPlugin {
   fn build(&self, app: &mut App) {
     app
-      // The settings will be a component that lives in the main world but will
-      // be extracted to the render world every frame.
-      // This makes it possible to control the effect from the main world.
-      // This plugin will take care of extracting it automatically.
-      // It's important to derive [`ExtractComponent`] on [`PixelCamSettings`] for this plugin to work correctly.
       .add_plugin(ExtractComponentPlugin::<PixelCamSettings>::default())
-      // The settings will also be the data used in the shader.
-      // This plugin will prepare the component for the GPU by creating a uniform buffer
-      // and writing the data to that buffer every frame.
       .add_plugin(UniformComponentPlugin::<PixelCamSettings>::default())
+      // MSAA doesn't make sense with pixelization but also breaks the pipeline
+      // because the bind group doesn't expect a multisampled texture
+      .insert_resource(Msaa::Off)
       .add_system(maintain_pixel_cam_screen_resolution);
 
     // Load the shader and assign it its handle
@@ -215,7 +209,7 @@ impl Node for PixelCamNode {
     let bind_group = render_context
       .render_device()
       .create_bind_group(&BindGroupDescriptor {
-        label: Some("post_process_bind_group"),
+        label: Some("pixel_cam_bind_group"),
         layout: &pixel_cam_pipeline.layout,
         // It's important for this to match the BindGroupLayout defined in the PixelCamPipeline
         entries: &[
@@ -420,16 +414,16 @@ impl FromWorld for PixelCamPipeline {
 #[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
 pub struct PixelCamSettings {
   window_size: Vec2,
-  pub new_pixel_size: f32,
+  pub max_pixel_size: f32,
   pub artificial_near_field: f32,
   pub decay_rate: f32,
 }
 
 impl PixelCamSettings {
-  pub fn new(new_pixel_size: f32, artificial_near_field: f32, decay_rate: f32) -> Self {
+  pub fn new(max_pixel_size: f32, artificial_near_field: f32, decay_rate: f32) -> Self {
     Self {
       window_size: Vec2::new(0.0, 0.0),
-      new_pixel_size,
+      max_pixel_size: max_pixel_size,
       artificial_near_field,
       decay_rate,
     }
@@ -438,7 +432,7 @@ impl PixelCamSettings {
 
 impl Default for PixelCamSettings {
   fn default() -> Self {
-    Self::new(30.0, 2.0, 0.5)
+    Self::new(40.0, 2.0, 0.5)
   }
 }
 

@@ -247,7 +247,6 @@ fn main() {
         .set(ImagePlugin::default_nearest()),
     )
     // graphics config
-    .insert_resource(Msaa::Off)
     .add_plugin(PixelCamPlugin)
     // diagnostic config
     .add_plugin(LogDiagnosticsPlugin::default())
