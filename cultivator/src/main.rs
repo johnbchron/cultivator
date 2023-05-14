@@ -196,9 +196,9 @@ fn handle_camera_movement(
       delta.z += 1.0;
     }
     if keyboard_input.pressed(KeyCode::Up) {
-      pixel_cam_settings.new_pixel_size -= 0.1;
+      pixel_cam_settings.max_pixel_size -= 0.1;
     } else if keyboard_input.pressed(KeyCode::Down) {
-      pixel_cam_settings.new_pixel_size += 0.1;
+      pixel_cam_settings.max_pixel_size += 0.1;
     }
     if keyboard_input.pressed(KeyCode::Q) || keyboard_input.pressed(KeyCode::E)
     {
