@@ -19,7 +19,10 @@
 //      -1  0  1  2  3
 //
 
-const N_COLORS: f32 = 8.0;
+const N_SAMPLES: u32 = 1u;
+const N_HUES: f32 = 8.0;
+const N_COLOR_STOPS: f32 = 12.0;
+const DITHER_STRENGTH: f32 = 1.0;
 
 #import bevy_core_pipeline::fullscreen_vertex_shader
 struct PixelCamSettings {
@@ -39,12 +42,12 @@ var<uniform> settings: PixelCamSettings;
 @group(0) @binding(4)
 var depth_prepass_texture: texture_depth_2d;
 
-fn stepped_uv_coords(in: FullscreenVertexOutput, pixel_size: f32) -> vec2<f32> {
-  return round(in.position.xy / pixel_size) * pixel_size / settings.window_size;
+fn stepped_uv_coords(in: vec2<f32>, pixel_size: f32) -> vec2<f32> {
+  return round(in.xy / pixel_size) * pixel_size / settings.window_size;
 }
 
-fn stepped_uv_coords_from_screenspace_origin(in: FullscreenVertexOutput, pixel_size: f32, origin: vec2<f32>) -> vec2<f32> {
-  return (floor((in.position.xy - origin) / pixel_size) * pixel_size + origin) / settings.window_size;
+fn stepped_uv_coords_from_screenspace_origin(in: vec2<f32>, pixel_size: f32, origin: vec2<f32>) -> vec2<f32> {
+  return (floor((in.xy - origin) / pixel_size) * pixel_size + origin) / settings.window_size;
 }
 
 fn linear_depth_at_uv(in: FullscreenVertexOutput) -> f32 {
@@ -61,8 +64,23 @@ fn pixel_size_from_depth(in: FullscreenVertexOutput, template_pixel_size: f32) -
   return ceil(unstepped_pixel_size * ceil(abs(template_pixel_size)));
 }
 
+fn screen_space_dither(position: vec2<f32>) -> vec3<f32> {
+  var dither = vec3<f32>(dot(vec2<f32>(171.0, 231.0), position)).xxx;
+  dither = fract(dither.rgb / vec3<f32>(103.0, 71.0, 97.0));
+  return (dither - 0.5) / 255.0;
+}
+
+fn pixel_space_dither(in: FullscreenVertexOutput, pixel_size: f32) -> vec3<f32> {
+  let position = stepped_uv_coords_from_screenspace_origin(in.position.xy, pixel_size, vec2<f32>(0.0, 0.0)) * settings.window_size;
+  return screen_space_dither(position);
+}
+
 fn happy_art_curve(x: f32) -> f32 {
-  return log(0.9 * x + 0.1) + 1.0;
+  return sqrt(log(0.9 * x + 0.1) + 1.0);
+}
+
+fn reverse_happy_art_curve(x: f32) -> f32 {
+  return 1.0 - happy_art_curve(1.0 - x);
 }
 
 fn rgb_to_hsv(c: vec3<f32>) -> vec3<f32> {
@@ -82,15 +100,25 @@ fn hsv_to_rgb(hsb : vec3<f32>) -> vec3<f32> {
 }
 
 fn coerce_color(in: vec3<f32>) -> vec3<f32> {
-  var hsv: vec3<f32> = rgb_to_hsv(in);
-  // snap the saturation to the nearest N_COLORS, rounding up
-  hsv.y = round(hsv.y * N_COLORS) / N_COLORS;
-  // make sure that the value is below log(0.9x+0.1)+1
-  // https://www.youtube.com/watch?v=rxNDmfFw2zU
-  hsv.z = min(happy_art_curve(1.0 - hsv.y), hsv.z);
+  let hsv: vec3<f32> = rgb_to_hsv(in);
+  var hue: f32 = hsv.x;
+  var sat: f32 = hsv.y;
+  var val: f32 = hsv.z;
+  
+  // // snap the hue to the nearest N_HUES
+  // hue = floor(hue * N_HUES) / N_HUES;
+
+  // shift the hue up to 30 degrees up or down based on level
+  hue = hue + (0.1 * (round(val * N_COLOR_STOPS) / N_COLOR_STOPS * 2.0 - 1.0));
+  hue = fract(hue);
+
+  // snap the saturation to the nearest N_COLORS
+  sat = round(sat * N_COLOR_STOPS) / N_COLOR_STOPS;
+  
   // // snap the value to the nearest N_COLORS
-  // hsv.z = round(hsv.z * N_COLORS) / N_COLORS;
-  return hsv_to_rgb(hsv);
+  val = round(val * N_COLOR_STOPS) / N_COLOR_STOPS;
+
+  return hsv_to_rgb(vec3<f32>(hue, sat, val));
 }
 
 @fragment
@@ -99,10 +127,29 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
   let current_pixel_size = pixel_size_from_depth(in, settings.max_pixel_size);
   
   var result_color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
-  
-  let sample_uv = stepped_uv_coords_from_screenspace_origin(in, current_pixel_size, vec2<f32>(0.0, 0.0));
-  result_color = textureSample(screen_texture, texture_sampler, sample_uv).rgb;
-  
+
+  let samples_per_side = N_SAMPLES * u32(trunc(current_pixel_size));
+  var samples_taken: u32 = 0u;
+  for (var i = 0u; i < samples_per_side; i = i + 1u) {
+    for (var j = 0u; j < samples_per_side; j = j + 1u) {
+      let sample_uv = stepped_uv_coords_from_screenspace_origin(
+        in.position.xy + (vec2<f32>(f32(i), f32(j)) / f32(samples_per_side) * 2.0 - 1.0),
+        current_pixel_size,
+        vec2<f32>(0.0, 0.0)
+      );
+      result_color = result_color + textureSample(screen_texture, texture_sampler, sample_uv).rgb;
+      samples_taken = samples_taken + 1u;
+
+    }
+  }
+  result_color = result_color / f32(samples_taken);
+  // let sample_uv = stepped_uv_coords_from_screenspace_origin(in, current_pixel_size, vec2<f32>(0.0, 0.0));
+  // result_color = textureSample(screen_texture, texture_sampler, sample_uv).rgb;
+
+  // apply dither
+  let dither = pixel_space_dither(in, current_pixel_size);
+  result_color = result_color + dither * DITHER_STRENGTH;
+
   result_color = coerce_color(result_color);
 
   return vec4<f32>(result_color, 1.0);
