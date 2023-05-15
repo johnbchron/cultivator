@@ -19,6 +19,8 @@
 //      -1  0  1  2  3
 //
 
+const N_COLORS: f32 = 8.0;
+
 #import bevy_core_pipeline::fullscreen_vertex_shader
 struct PixelCamSettings {
   window_size: vec2<f32>,
@@ -59,6 +61,38 @@ fn pixel_size_from_depth(in: FullscreenVertexOutput, template_pixel_size: f32) -
   return ceil(unstepped_pixel_size * ceil(abs(template_pixel_size)));
 }
 
+fn happy_art_curve(x: f32) -> f32 {
+  return log(0.9 * x + 0.1) + 1.0;
+}
+
+fn rgb_to_hsv(c: vec3<f32>) -> vec3<f32> {
+  // https://github.com/patriciogonzalezvivo/lygia/blob/cce7260a220bf453bb3d703b81a2623678131835/color/space/rgb2hsv.wgsl#L2
+  let K = vec4<f32>(0.0, -0.33333333333333333333, 0.6666666666666666666, -1.0);
+  let p = mix(vec4<f32>(c.bg, K.wz), vec4<f32>(c.gb, K.xy), step(c.b, c.g));
+  let q = mix(vec4<f32>(p.xyw, c.r), vec4<f32>(c.r, p.yzx), step(p.x, c.r));
+  let d = q.x - min(q.w, q.y);
+  let e = 1.0e-10;
+  return vec3<f32>(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+fn hsv_to_rgb(hsb : vec3<f32>) -> vec3<f32> {
+  // https://github.com/patriciogonzalezvivo/lygia/blob/cce7260a220bf453bb3d703b81a2623678131835/color/space/hsv2rgb.wgsl
+  var rgb = saturate(abs(((hsb.x * 6.0 + vec3<f32>(0.0, 4.0, 2.0)) % 6.0) - 3.0) - 1.0);
+  return hsb.z * mix(vec3(1.), rgb, hsb.y);
+}
+
+fn coerce_color(in: vec3<f32>) -> vec3<f32> {
+  var hsv: vec3<f32> = rgb_to_hsv(in);
+  // snap the saturation to the nearest N_COLORS, rounding up
+  hsv.y = round(hsv.y * N_COLORS) / N_COLORS;
+  // make sure that the value is below log(0.9x+0.1)+1
+  // https://www.youtube.com/watch?v=rxNDmfFw2zU
+  hsv.z = min(happy_art_curve(1.0 - hsv.y), hsv.z);
+  // // snap the value to the nearest N_COLORS
+  // hsv.z = round(hsv.z * N_COLORS) / N_COLORS;
+  return hsv_to_rgb(hsv);
+}
+
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
   let screen_size = settings.window_size;
@@ -68,6 +102,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
   
   let sample_uv = stepped_uv_coords_from_screenspace_origin(in, current_pixel_size, vec2<f32>(0.0, 0.0));
   result_color = textureSample(screen_texture, texture_sampler, sample_uv).rgb;
+  
+  result_color = coerce_color(result_color);
 
   return vec4<f32>(result_color, 1.0);
 }
