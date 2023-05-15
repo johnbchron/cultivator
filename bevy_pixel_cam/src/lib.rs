@@ -439,7 +439,7 @@ impl Default for PixelCamSettings {
 #[derive(Bundle, Default)]
 pub struct PixelCamBundle {
   pub settings: PixelCamSettings,
-  depth_prepass: DepthPrepass,
+  pub depth_prepass: DepthPrepass,
 }
 
 fn maintain_pixel_cam_screen_resolution(
