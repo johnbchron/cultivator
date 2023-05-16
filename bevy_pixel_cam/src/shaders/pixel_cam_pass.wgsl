@@ -128,23 +128,22 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
   
   var result_color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 
-  let samples_per_side = N_SAMPLES * u32(trunc(current_pixel_size));
-  var samples_taken: u32 = 0u;
-  for (var i = 0u; i < samples_per_side; i = i + 1u) {
-    for (var j = 0u; j < samples_per_side; j = j + 1u) {
-      let sample_uv = stepped_uv_coords_from_screenspace_origin(
-        in.position.xy + (vec2<f32>(f32(i), f32(j)) / f32(samples_per_side) * 2.0 - 1.0),
-        current_pixel_size,
-        vec2<f32>(0.0, 0.0)
-      );
-      result_color = result_color + textureSample(screen_texture, texture_sampler, sample_uv).rgb;
-      samples_taken = samples_taken + 1u;
-
-    }
-  }
-  result_color = result_color / f32(samples_taken);
-  // let sample_uv = stepped_uv_coords_from_screenspace_origin(in, current_pixel_size, vec2<f32>(0.0, 0.0));
-  // result_color = textureSample(screen_texture, texture_sampler, sample_uv).rgb;
+  // let samples_per_side = N_SAMPLES * u32(trunc(current_pixel_size));
+  // var samples_taken: u32 = 0u;
+  // for (var i = 0u; i < samples_per_side; i = i + 1u) {
+  //   for (var j = 0u; j < samples_per_side; j = j + 1u) {
+  //     let sample_uv = stepped_uv_coords_from_screenspace_origin(
+  //       in.position.xy + (vec2<f32>(f32(i), f32(j)) / f32(samples_per_side) * 2.0 - 1.0),
+  //       current_pixel_size,
+  //       vec2<f32>(0.0, 0.0)
+  //     );
+  //     result_color = result_color + textureSample(screen_texture, texture_sampler, sample_uv).rgb;
+  //     samples_taken = samples_taken + 1u;
+  //   }
+  // }
+  // result_color = result_color / f32(samples_taken);
+  let sample_uv = stepped_uv_coords_from_screenspace_origin(in.position.xy, current_pixel_size, vec2<f32>(0.0, 0.0));
+  result_color = textureSample(screen_texture, texture_sampler, sample_uv).rgb;
 
   // apply dither
   let dither = pixel_space_dither(in, current_pixel_size);
