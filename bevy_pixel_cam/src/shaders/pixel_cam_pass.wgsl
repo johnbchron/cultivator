@@ -19,9 +19,13 @@
 //      -1  0  1  2  3
 //
 
-const N_SAMPLES: u32 = 1u;
-const N_HUES: f32 = 8.0;
+// const N_SAMPLES: u32 = 1u;
+// const N_HUES: f32 = 8.0;
 const N_COLOR_STOPS: f32 = 12.0;
+const HUE_SHIFT_WARM: f32 = 15.0;
+const HUE_SHIFT_WARM_THRESHOLD: f32 = 0.75;
+const HUE_SHIFT_COLD: f32 = 30.0;
+const HUE_SHIFT_COLD_THRESHOLD: f32 = 0.25;
 const DITHER_STRENGTH: f32 = 1.0;
 
 #import bevy_core_pipeline::fullscreen_vertex_shader
@@ -76,7 +80,7 @@ fn pixel_space_dither(in: FullscreenVertexOutput, pixel_size: f32) -> vec3<f32> 
 }
 
 fn happy_art_curve(x: f32) -> f32 {
-  return sqrt(log(0.9 * x + 0.1) + 1.0);
+  return log(0.9 * x + 0.1) + 1.0;
 }
 
 fn reverse_happy_art_curve(x: f32) -> f32 {
@@ -104,19 +108,24 @@ fn coerce_color(in: vec3<f32>) -> vec3<f32> {
   var hue: f32 = hsv.x;
   var sat: f32 = hsv.y;
   var val: f32 = hsv.z;
-  
-  // // snap the hue to the nearest N_HUES
-  // hue = floor(hue * N_HUES) / N_HUES;
 
-  // shift the hue up to 30 degrees up or down based on level
-  hue = hue + (0.1 * (round(val * N_COLOR_STOPS) / N_COLOR_STOPS * 2.0 - 1.0));
+  let hue_shift_input = round(val * N_COLOR_STOPS) / N_COLOR_STOPS;
+  if (val >= HUE_SHIFT_WARM_THRESHOLD) {
+    let hue_shift_adjusted_input = (hue_shift_input - HUE_SHIFT_WARM_THRESHOLD) / (1.0 - HUE_SHIFT_WARM_THRESHOLD);
+    let hue_shift_amount = hue_shift_adjusted_input * (HUE_SHIFT_WARM / 360.0);
+    hue = hue + hue_shift_amount;
+  } else if (val <= HUE_SHIFT_COLD_THRESHOLD) {
+    let hue_shift_adjusted_input = 1.0 - (hue_shift_input / HUE_SHIFT_COLD_THRESHOLD);
+    let hue_shift_amount = hue_shift_adjusted_input * (HUE_SHIFT_COLD / 360.0);
+    hue = hue - hue_shift_amount;
+  }
   hue = fract(hue);
+  
+  // // snap the value to the nearest N_COLORS
+  val = round((val + ((1.0 / N_COLOR_STOPS / 5.0) * pow(1.0 - val, 2.0))) * N_COLOR_STOPS) / N_COLOR_STOPS;
 
   // snap the saturation to the nearest N_COLORS
   sat = round(sat * N_COLOR_STOPS) / N_COLOR_STOPS;
-  
-  // // snap the value to the nearest N_COLORS
-  val = round(val * N_COLOR_STOPS) / N_COLOR_STOPS;
 
   return hsv_to_rgb(vec3<f32>(hue, sat, val));
 }
