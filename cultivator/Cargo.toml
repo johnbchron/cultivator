@@ -10,7 +10,7 @@ bevy = { version = "0.10.1", default-features = true, features = ["bevy_asset", 
 bevy_diagnostic_vertex_count = { git = "https://github.com/johnbchron/bevy_diagnostic_vertex_count", tag = "v0.3" }
 bevy_pixel_cam = { path = "../bevy_pixel_cam" }
 planiscope = { path = "../planiscope" }
-hexx = "0.5.3"
+hexx = "0.6.0"
 rand = "0.8.5"
 strum = "0.24"
 strum_macros = "0.24"
