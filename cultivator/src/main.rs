@@ -41,6 +41,7 @@ use bevy_diagnostic_vertex_count::{
   VertexCountDiagnosticsPlugin, VertexCountDiagnosticsSettings,
 };
 use bevy_pixel_cam::{PixelCamPlugin, PixelCamSettings, PixelCamBundle};
+use planiscope::{sample_tessellate, to_bevy_mesh};
 
 use hexx::*;
 
@@ -48,91 +49,91 @@ use std::collections::HashMap;
 // for enum to vec
 use strum::IntoEnumIterator;
 
-#[derive(Resource)]
-struct HexMaterials(HashMap<HexItem, Handle<StandardMaterial>>);
+// #[derive(Resource)]
+// struct HexMaterials(HashMap<HexItem, Handle<StandardMaterial>>);
 
-#[derive(Resource)]
-struct HexMeshes(HashMap<HexItem, Handle<Mesh>>);
+// #[derive(Resource)]
+// struct HexMeshes(HashMap<HexItem, Handle<Mesh>>);
 
-impl FromWorld for HexMaterials {
-  fn from_world(world: &mut World) -> Self {
-    let mut map = HashMap::new();
-    for item in HexItem::iter() {
-      let asset_server = world.get_resource::<AssetServer>().unwrap();
-      let material = item.build_material(asset_server);
-      // get the material asset resource or add it if it doesn't exist
-      let mut materials =
-        world.get_resource_mut::<Assets<StandardMaterial>>().unwrap();
+// impl FromWorld for HexMaterials {
+//   fn from_world(world: &mut World) -> Self {
+//     let mut map = HashMap::new();
+//     for item in HexItem::iter() {
+//       let asset_server = world.get_resource::<AssetServer>().unwrap();
+//       let material = item.build_material(asset_server);
+//       // get the material asset resource or add it if it doesn't exist
+//       let mut materials =
+//         world.get_resource_mut::<Assets<StandardMaterial>>().unwrap();
 
-      map.insert(item, materials.add(material));
-    }
-    Self(map)
-  }
-}
+//       map.insert(item, materials.add(material));
+//     }
+//     Self(map)
+//   }
+// }
 
-impl FromWorld for HexMeshes {
-  fn from_world(world: &mut World) -> Self {
-    let mut meshes = world.get_resource_mut::<Assets<Mesh>>().unwrap();
-    let mut map = HashMap::new();
-    for item in HexItem::iter() {
-      map.insert(item, meshes.add(item.build_mesh()));
-    }
-    Self(map)
-  }
-}
+// impl FromWorld for HexMeshes {
+//   fn from_world(world: &mut World) -> Self {
+//     let mut meshes = world.get_resource_mut::<Assets<Mesh>>().unwrap();
+//     let mut map = HashMap::new();
+//     for item in HexItem::iter() {
+//       map.insert(item, meshes.add(item.build_mesh()));
+//     }
+//     Self(map)
+//   }
+// }
 
-fn build_hex_bundle(
-  grid_item: &HexItem,
-  hex: &Hex,
-  hex_materials: &HexMaterials,
-  hex_meshes: &HexMeshes,
-) -> (MaterialMeshBundle<StandardMaterial>, HexPosition, HexItem) {
-  let hex_layout = HexLayout {
-    hex_size: HEX_SIZE,
-    ..Default::default()
-  };
-  let position = hex_layout.hex_to_world_pos(*hex);
-  let material = hex_materials.0.get(grid_item).unwrap();
-  let mesh = hex_meshes.0.get(grid_item).unwrap();
-  (
-    MaterialMeshBundle {
-      mesh: mesh.clone(),
-      material: material.clone(),
-      transform: Transform::from_translation(Vec3::new(
-        position.x, 0.0, position.y,
-      ))
-      .looking_to(Vec3::Z, Vec3::Y),
-      ..Default::default()
-    },
-    HexPosition {
-      pos: *hex,
-      ..Default::default()
-    },
-    *grid_item,
-  )
-}
+// fn build_hex_bundle(
+//   grid_item: &HexItem,
+//   hex: &Hex,
+//   hex_materials: &HexMaterials,
+//   hex_meshes: &HexMeshes,
+// ) -> (MaterialMeshBundle<StandardMaterial>, HexPosition, HexItem) {
+//   let hex_layout = HexLayout {
+//     hex_size: HEX_SIZE,
+//     ..Default::default()
+//   };
+//   let position = hex_layout.hex_to_world_pos(*hex);
+//   let material = hex_materials.0.get(grid_item).unwrap();
+//   let mesh = hex_meshes.0.get(grid_item).unwrap();
+//   (
+//     MaterialMeshBundle {
+//       mesh: mesh.clone(),
+//       material: material.clone(),
+//       transform: Transform::from_translation(Vec3::new(
+//         position.x, 0.0, position.y,
+//       ))
+//       .looking_to(Vec3::Z, Vec3::Y),
+//       ..Default::default()
+//     },
+//     HexPosition {
+//       pos: *hex,
+//       ..Default::default()
+//     },
+//     *grid_item,
+//   )
+// }
 
-fn build_test_grid(
-  mut commands: Commands,
-  hex_materials: Res<HexMaterials>,
-  hex_meshes: Res<HexMeshes>,
-) {
-  let n = 20;
-  let mut grid = HashMap::new();
-  for q in -n..(n + 1) {
-    let r1 = (-n - q).max(-n);
-    let r2 = (n - q).min(n);
-    for r in r1..r2 {
-      let hex = Hex::new(q, r);
-      let item = HexItem::random();
-      grid.insert(hex, item);
-    }
-  }
+// fn build_test_grid(
+//   mut commands: Commands,
+//   hex_materials: Res<HexMaterials>,
+//   hex_meshes: Res<HexMeshes>,
+// ) {
+//   let n = 20;
+//   let mut grid = HashMap::new();
+//   for q in -n..(n + 1) {
+//     let r1 = (-n - q).max(-n);
+//     let r2 = (n - q).min(n);
+//     for r in r1..r2 {
+//       let hex = Hex::new(q, r);
+//       let item = HexItem::random();
+//       grid.insert(hex, item);
+//     }
+//   }
 
-  for (hex, item) in grid.iter() {
-    commands.spawn(build_hex_bundle(item, hex, &hex_materials, &hex_meshes));
-  }
-}
+//   for (hex, item) in grid.iter() {
+//     commands.spawn(build_hex_bundle(item, hex, &hex_materials, &hex_meshes));
+//   }
+// }
 
 fn setup_graphics(mut commands: Commands) {
   // spawn lighting
@@ -152,7 +153,7 @@ fn setup_graphics(mut commands: Commands) {
     ..default()
   });
 
-  let isometric_rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_8);
+  let isometric_rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4);
 
   commands.spawn((
     Camera3dBundle {
@@ -160,7 +161,7 @@ fn setup_graphics(mut commands: Commands) {
         .with_rotation(isometric_rotation)
         .with_translation(Vec3::new(
           0.0,
-          10.0 + HEX_HEIGHT,
+          10.0,
           10.0,
         )),
       // projection: Projection::Orthographic(OrthographicProjection {
@@ -174,6 +175,19 @@ fn setup_graphics(mut commands: Commands) {
     },
     PixelCamBundle::default(),
   ));
+}
+
+fn build_planiscope_test_tessellation(
+  mut commands: Commands,
+  mut meshes: ResMut<Assets<Mesh>>,
+  mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+  commands.spawn(PbrBundle {
+    mesh: meshes.add(to_bevy_mesh(sample_tessellate())),
+    material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
+    transform: Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+    ..Default::default()
+  });
 }
 
 fn handle_camera_movement(
@@ -258,13 +272,14 @@ fn main() {
     .add_plugin(VertexCountDiagnosticsPlugin::default())
     
     // prebuild meshes and materials
-    .init_resource::<HexMaterials>()
-    .init_resource::<HexMeshes>()
+    // .init_resource::<HexMaterials>()
+    // .init_resource::<HexMeshes>()
     
     // setup graphics
     .add_startup_system(setup_graphics)
     // spawn game objects
-    .add_startup_system(build_test_grid)
+    // .add_startup_system(build_test_grid)
+    .add_startup_system(build_planiscope_test_tessellation)
     // handle input
     .add_system(handle_camera_movement)
     // maintainers
