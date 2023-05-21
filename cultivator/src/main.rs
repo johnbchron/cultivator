@@ -7,7 +7,7 @@ use hex::position::HexPosition;
 
 use bevy::{
   app::{App, PluginGroup},
-  asset::{AddAsset, AssetServer, Assets, Handle},
+  asset::{AssetServer, Assets, Handle},
   core_pipeline::{
     core_3d::Camera3dBundle,
     tonemapping::{DebandDither, Tonemapping},
@@ -24,12 +24,12 @@ use bevy::{
   input::{keyboard::KeyCode, Input},
   math::{Quat, Vec3},
   pbr::{DirectionalLightBundle, PointLight, PointLightBundle},
-  prelude::{MaterialMeshBundle, MaterialPlugin, StandardMaterial},
+  prelude::*,
   render::{
     camera::{Camera, Projection},
     mesh::Mesh,
     texture::ImagePlugin,
-    view::{ColorGrading, Msaa},
+    view::{ColorGrading},
   },
   time::Time,
   transform::components::Transform,
@@ -234,7 +234,7 @@ fn handle_camera_movement(
 
 fn main() {
   App::new()
-    // default plugins with no vsync
+    // default plugins with no vsync and nearest neighbor scaling
     .add_plugins(
       DefaultPlugins
         .set(WindowPlugin {
@@ -246,17 +246,21 @@ fn main() {
         })
         .set(ImagePlugin::default_nearest()),
     )
-    // graphics config
+    
+    // graphics plugins
     .add_plugin(PixelCamPlugin)
+    
     // diagnostic config
     .add_plugin(LogDiagnosticsPlugin::default())
     .add_plugin(FrameTimeDiagnosticsPlugin::default())
     .add_plugin(EntityCountDiagnosticsPlugin::default())
     .insert_resource(VertexCountDiagnosticsSettings { only_visible: true })
     .add_plugin(VertexCountDiagnosticsPlugin::default())
+    
     // prebuild meshes and materials
     .init_resource::<HexMaterials>()
     .init_resource::<HexMeshes>()
+    
     // setup graphics
     .add_startup_system(setup_graphics)
     // spawn game objects
@@ -264,5 +268,7 @@ fn main() {
     // handle input
     .add_system(handle_camera_movement)
     // maintainers
+    
+    // run app
     .run();
 }

@@ -3,6 +3,7 @@
 members = [
   "cultivator",
   "bevy_pixel_cam",
+  "planiscope",
 ]
 resolver = "2"
 
