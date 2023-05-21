@@ -13,21 +13,23 @@ impl tessellation::ImplicitFunction<f64> for NoiseTessellator {
     &self.b_box
   }
   fn value(&self, p: &na::Point3<f64>) -> f64 {
-    // return self.noise.get([p.x, p.y, p.z]) - 0.9;
-    return na::Vector3::new(p.x, p.y, p.z).norm() - 1.0;
+    let noise = self.noise.get([p.x, p.y, p.z]);
+    // normalize the noise value
+    noise
+    // return na::Vector3::new(p.x, p.y, p.z).norm() - 1.0;
   }
   fn normal(&self, p: &na::Point3<f64>) -> na::Vector3<f64> {
-    // let dx = 0.001;
-    // let dy = 0.001;
-    // let dz = 0.001;
-    // let x = self.value(&na::Point3::new(p.x + dx, p.y, p.z))
-    //   - self.value(&na::Point3::new(p.x - dx, p.y, p.z));
-    // let y = self.value(&na::Point3::new(p.x, p.y + dy, p.z))
-    //   - self.value(&na::Point3::new(p.x, p.y - dy, p.z));
-    // let z = self.value(&na::Point3::new(p.x, p.y, p.z + dz))
-    //   - self.value(&na::Point3::new(p.x, p.y, p.z - dz));
-    // na::Vector3::new(x, y, z)
-    return na::Vector3::new(p.x, p.y, p.z).normalize();
+    let dx = 0.001;
+    let dy = 0.001;
+    let dz = 0.001;
+    let x = self.value(&na::Point3::new(p.x + dx, p.y, p.z))
+      - self.value(&na::Point3::new(p.x - dx, p.y, p.z));
+    let y = self.value(&na::Point3::new(p.x, p.y + dy, p.z))
+      - self.value(&na::Point3::new(p.x, p.y - dy, p.z));
+    let z = self.value(&na::Point3::new(p.x, p.y, p.z + dz))
+      - self.value(&na::Point3::new(p.x, p.y, p.z - dz));
+    na::Vector3::new(x, y, z)
+    // return na::Vector3::new(p.x, p.y, p.z).normalize();
   }
 }
 
