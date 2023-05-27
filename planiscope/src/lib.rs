@@ -13,10 +13,8 @@ impl tessellation::ImplicitFunction<f64> for NoiseTessellator {
     &self.b_box
   }
   fn value(&self, p: &na::Point3<f64>) -> f64 {
-    let noise = self.noise.get([p.x, p.y, p.z]);
-    // normalize the noise value
-    noise
-    // return na::Vector3::new(p.x, p.y, p.z).norm() - 1.0;
+    na::Vector3::new(p.x, p.y, p.z).magnitude() - 1.0
+    // (self.noise.get([p.x, p.y, p.z]) - 0.5) * 2.0
   }
   fn normal(&self, p: &na::Point3<f64>) -> na::Vector3<f64> {
     let dx = 0.001;
@@ -28,12 +26,12 @@ impl tessellation::ImplicitFunction<f64> for NoiseTessellator {
       - self.value(&na::Point3::new(p.x, p.y - dy, p.z));
     let z = self.value(&na::Point3::new(p.x, p.y, p.z + dz))
       - self.value(&na::Point3::new(p.x, p.y, p.z - dz));
-    na::Vector3::new(x, y, z)
+    na::Vector3::new(x, y, z).normalize()
     // return na::Vector3::new(p.x, p.y, p.z).normalize();
   }
 }
 
-pub fn tessellate(
+pub fn noise_tessellate(
   noise_tessellator: NoiseTessellator,
   resolution: f32,
   relative_error: f32,
@@ -56,7 +54,7 @@ pub fn sample_tessellate() -> TessMesh<f64> {
       max: na::Point3::new(1.0, 1.0, 1.0),
     },
   };
-  let mesh = tessellate(noise_tessellator,  0.2, 0.1).unwrap();
+  let mesh = noise_tessellate(noise_tessellator,  0.02, 0.01).unwrap();
   mesh
 }
 
@@ -70,13 +68,6 @@ pub fn to_bevy_mesh(input: TessMesh<f64>) -> BevyMesh {
 			.map(|v| [v[0] as f32, v[1] as f32, v[2] as f32])
 			.collect::<Vec<[f32; 3]>>(),
 	);
-	// mesh.insert_attribute(
-	// 	BevyMesh::ATTRIBUTE_NORMAL,
-	// 	// call input.normal32() on the index of each face in faces
-	// 	(0..input.faces.len())
-	// 		.map(|i| input.normal32(i))
-	// 		.collect::<Vec<[f32; 3]>>(),
-	// );
 	mesh.set_indices(Some(
 		bevy_render::mesh::Indices::U32(
 			input
@@ -88,5 +79,9 @@ pub fn to_bevy_mesh(input: TessMesh<f64>) -> BevyMesh {
 				.collect::<Vec<u32>>(),
 		),
 	));
+  
+  mesh.duplicate_vertices();
+  mesh.compute_flat_normals();
+  
 	mesh
 }

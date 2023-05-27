@@ -138,9 +138,8 @@ use strum::IntoEnumIterator;
 fn setup_graphics(mut commands: Commands) {
   // spawn lighting
   commands.spawn(DirectionalLightBundle {
-    // rotate 45 degrees around the x axis and 45 degrees around the z axis
-    transform: Transform::from_rotation(Quat::from_rotation_x(-0.5 * std::f32::consts::PI))
-      * Transform::from_rotation(Quat::from_rotation_z(-0.25 * std::f32::consts::PI)),
+    // point straight down
+    transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
     ..default()
   });
   commands.spawn(PointLightBundle {
@@ -262,7 +261,7 @@ fn main() {
     )
     
     // graphics plugins
-    .add_plugin(PixelCamPlugin)
+    // .add_plugin(PixelCamPlugin)
     
     // diagnostic config
     .add_plugin(LogDiagnosticsPlugin::default())
