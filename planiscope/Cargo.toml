@@ -6,7 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy_render = "0.10.1"
 nalgebra = "0.22.0"
-noise = "0.8.2"
-tessellation = "0.8.2"
+fidget = { git = "https://github.com/mkeeter/fidget" }
