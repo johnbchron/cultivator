@@ -1542,7 +1542,6 @@ dependencies = [
 [[package]]
 name = "fidget"
 version = "0.2.0"
-source = "git+https://github.com/mkeeter/fidget#2d5b2664d1473d593d5c7cb50a8b415a2a0c6982"
 dependencies = [
  "arrayvec",
  "crossbeam-deque",
