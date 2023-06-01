@@ -1,82 +1,78 @@
+mod mesh;
+mod normals;
+pub mod transform;
 
-use fidget::eval::{Family, Tape};
-use fidget::mesh::{Mesh, Octree, Settings};
+use fidget::eval::Tape;
+use fidget::mesh::{Octree, Settings};
 use fidget::rhai::eval;
-// use fidget::context::Node;
-use fidget::vm;
 
-pub struct MeshWrapper {
-	pub mesh: Mesh,
-	pub normals: Vec<[f32; 3]>,
+use crate::mesh::{prune_mesh, FullMesh};
+use crate::normals::implicit_normals;
+use crate::transform::Transform;
+
+pub type LodCoord = spatialtree::coords::OctVec;
+pub type LodTree = spatialtree::OctTree<Chunk, LodCoord>;
+type Evaluator = fidget::vm::Eval;
+
+/// A container for the settings used to build a Coordination of Chunks.
+#[derive(Debug, Clone)]
+pub struct Template {
+  /// The expression for the implicit surface passed in by the user.
+  pub expr: String,
+  /// The size of the final volume. It will always be a cube, so this is a side length in world units.
+  pub volume_size: f32,
+  /// The octree depth used within each Chunk.
+  pub local_detail: u8,
+  /// The amount each Chunk should overlap with its neighbor. 1.0 means no overlap, 1.5 means 50% overlap.
+  pub bleed: f32,
+  /// The LodCoords around which to center the Coordination octree.
+  pub targets: Vec<LodCoord>,
 }
 
-// fn transform_viewport(root: Node, ctx: &mut fidget::context::Context, mat: [[f32; 4]; 4]) -> Node {
-//   let (x, y, z) = (ctx.x(), ctx.y(), ctx.z());
-//   let (x, y, z, w) = (
-//     mat[0][0] * x + mat[0][1] * y + mat[0][2] * z + mat[0][3],
-//     mat[1][0] * x + mat[1][1] * y + mat[1][2] * z + mat[1][3],
-//     mat[2][0] * x + mat[2][1] * y + mat[2][2] * z + mat[2][3],
-//     mat[3][0] * x + mat[3][1] * y + mat[3][2] * z + mat[3][3],
-//   );
-// }
+/// A finished chunk. It contains its mesh data and the information used to generate it.
+pub struct Chunk {
+  /// The template used to build this chunk.
+  pub template: Template,
+  /// The location and (global) detail of this chunk.
+  pub coords: LodCoord,
+  /// The tape after it has been optimized for this specific location.
+  pub local_tape: Tape<Evaluator>,
+  /// The completed mesh data for this chunk.
+  pub full_mesh: FullMesh,
+}
 
-pub fn mesh_from_surface(expr: &str, depth: u8) -> MeshWrapper {
-  let (surface, ctx) = eval(expr).unwrap();
-  let transformed_surface = surface;
-  
-  let tape = ctx.get_tape::<vm::Eval>(transformed_surface).unwrap();
+pub fn build_from_template(template: Template) -> LodTree {
+  let mut tree = LodTree::with_capacity(32, 64);
 
+  let chunk_creator = |coords: LodCoord| {
+    let transform = Transform::from_lodcoords_to_map(coords, &template);
+    let (root, mut ctx) = eval(&template.expr).unwrap();
+    let transformed_root = transform.transform_context(root, &mut ctx);
+    let local_tape = ctx.get_tape::<Evaluator>(transformed_root).unwrap();
+
+    let full_mesh = mesh_from_surface(&local_tape, template.local_detail);
+    Chunk {
+      template: template.clone(),
+      coords,
+      local_tape,
+      full_mesh,
+    }
+  };
+
+  tree.lod_update(&template.targets, 0, chunk_creator, |_, _| {});
+  tree
+}
+
+fn mesh_from_surface(tape: &Tape<Evaluator>, depth: u8) -> FullMesh {
   let settings = Settings {
     threads: 8,
     min_depth: depth,
     max_depth: 0,
   };
-  let octree = Octree::build::<vm::Eval>(&tape, settings);
-  let mesh = octree.walk_dual(settings);
+  let octree = Octree::build::<Evaluator>(tape, settings);
+  let mesh = prune_mesh(octree.walk_dual(settings));
 
-  // let normals = smooth_vertex_normals(&mesh);
   let normals = implicit_normals(&mesh, tape);
 
-  MeshWrapper {
-    mesh,
-    normals,
-  }
-}
-
-#[allow(dead_code)]
-fn smooth_vertex_normals(mesh: &Mesh) -> Vec<[f32; 3]> {
-  let mut normals = vec![[0.0; 3]; mesh.vertices.len()];
-  for face in mesh.triangles.iter() {
-    let a = mesh.vertices[face[0] as usize];
-    let b = mesh.vertices[face[1] as usize];
-    let c = mesh.vertices[face[2] as usize];
-    let normal = (b - a).cross(&(c - a));
-    for i in 0..3 {
-      normals[face[i] as usize] = [
-        normals[face[i] as usize][0] + normal[0],
-        normals[face[i] as usize][1] + normal[1],
-        normals[face[i] as usize][2] + normal[2],
-      ];
-    }
-  }
-  normals
-}
-
-#[allow(dead_code)]
-fn implicit_normals<T: Family>(mesh: &Mesh, tape: Tape<T>) -> Vec<[f32; 3]> {
-  let eval = tape.new_grad_slice_evaluator();
-  let mut normals: Vec<[f32; 3]> = vec![];
-
-  for vertex in mesh.vertices.iter() {
-    let grad = eval.eval(&[vertex.x], &[vertex.y], &[vertex.z], &[]);
-    match grad {
-      Err(_) => normals.push([0.0; 3]),
-      Ok(grad) => {
-        let normal = [grad[0].dx, grad[0].dy, grad[0].dz];
-        normals.push(normal);
-      }
-    }
-  }
-
-  normals
+  FullMesh { mesh, normals }
 }
