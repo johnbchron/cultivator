@@ -1,9 +1,8 @@
 [workspace]
 
 members = [
-  "cultivator",
-  "bevy_pixel_cam",
-  "planiscope",
+  "crates/*",
+  "examples/*",
 ]
 resolver = "2"
 
@@ -17,3 +16,7 @@ opt-level = 3
 
 [profile.release]
 lto = "thin"
+
+# [[example]]
+# name = "bevy_pixel_cam_demo"
+# path = "examples/bevy_pixel_cam_demo/src/main.rs"
