@@ -1,104 +1,120 @@
+use crate::coords::Transform;
 
 use bevy_render::mesh::Mesh as BevyMesh;
-use fidget::mesh::Mesh;
-use nalgebra as na;
-use rayon::prelude::*;
+use fidget::eval::{Family, Tape};
+use fidget::mesh::{Mesh as FidgetMesh, Octree, Settings};
 
-use crate::transform::Transform;
-
-/// A Fidget mesh plus vertex normals.
+#[derive(Clone)]
 pub struct FullMesh {
-  pub mesh: Mesh,
-  pub normals: Vec<[f32; 3]>,
+  pub vertices: Vec<glam::Vec3A>,
+  pub triangles: Vec<glam::UVec3>,
+  pub normals: Vec<glam::Vec3A>,
 }
 
 impl FullMesh {
-  pub fn transform(&self, transform: &Transform) -> Self {
-    let scale: [f32; 3] = transform.scale;
-    let position: [f32; 3] = transform.position;
+  pub fn mesh_new<T: Family>(tape: &Tape<T>, depth: u8) -> Self {
+    let settings = Settings {
+      threads: 8,
+      min_depth: depth,
+      max_depth: 0,
+    };
+
+    let octree = Octree::build::<T>(tape, settings);
+    let fidget_mesh = octree.walk_dual(settings);
+    // let mesh = Self::prune_mesh();
+
+    let vertices = fidget_mesh
+      .vertices
+      .iter()
+      .map(|v| glam::Vec3A::new(v.x as f32, v.y as f32, v.z as f32))
+      .collect();
+    let triangles = fidget_mesh
+      .triangles
+      .iter()
+      .map(|t| glam::UVec3::new(t[0] as u32, t[1] as u32, t[2] as u32))
+      .collect();
+    let normals = implicit_normals(&fidget_mesh, tape);
+
     FullMesh {
-      mesh: Mesh {
-        triangles: self.mesh.triangles.clone(),
-        vertices: self.mesh.vertices.par_iter()
-          .map(|v| {
-            let v = na::Vector3::new(v.x, v.y, v.z);
-            let v = v.component_mul(&na::Vector3::new(scale[0], scale[1], scale[2]));
-            let v = v + na::Vector3::new(position[0], position[1], position[2]);
-            na::Vector3::new(v.x, v.y, v.z)
-          })
-          .collect::<Vec<_>>(),
-      },
-      normals: self.normals.clone(),
+      vertices,
+      triangles,
+      normals,
     }
   }
-}
 
-impl Clone for FullMesh {
-  fn clone(&self) -> Self {
-    FullMesh {
-      mesh: Mesh {
-        vertices: self.mesh.vertices.clone(),
-        triangles: self.mesh.triangles.clone(),
-      },
-      normals: self.normals.clone(),
-    }
+  pub fn transform(&mut self, transform: &Transform) {
+    self.vertices.iter_mut().for_each(|v| {
+      *v = *v * transform.scale + transform.position;
+    });
+  }
+
+  pub fn prune(&mut self) {
+    // prune triangles outside of the -1 to 1 range on any axis
+    const MESH_BLEED: [f32; 3] = [1.0, 1.0, 1.0];
+    let violating_verts = self
+      .vertices
+      .iter()
+      .enumerate()
+      .filter(|(_, v)| v.abs().cmpgt(MESH_BLEED.into()).any())
+      .map(|(i, _)| i)
+      .collect::<Vec<usize>>();
+
+    self.triangles.retain(|t| {
+      violating_verts
+        .iter()
+        .all(|i| !t.to_array().iter().any(|x| *x == (*i as u32)))
+    });
   }
 }
 
 impl From<FullMesh> for BevyMesh {
-  fn from(fullmesh: FullMesh) -> Self {
-    let mut mesh =
+  fn from(mesh: FullMesh) -> Self {
+    let mut bevy_mesh =
       BevyMesh::new(bevy_render::mesh::PrimitiveTopology::TriangleList);
-    mesh.insert_attribute(
+    bevy_mesh.insert_attribute(
       BevyMesh::ATTRIBUTE_POSITION,
-      fullmesh
-        .mesh
+      mesh
         .vertices
-        .iter()
-        .map(|v| [v.x, v.y, v.z])
-        .collect::<Vec<[f32; 3]>>(),
+        .into_iter()
+        .map(|v| Into::<[f32; 3]>::into(v))
+        .collect::<Vec<_>>(),
     );
-    mesh.insert_attribute(BevyMesh::ATTRIBUTE_NORMAL, fullmesh.normals);
-
-    mesh.set_indices(Some(bevy_render::mesh::Indices::U32(
-      fullmesh
-        .mesh
+    bevy_mesh.insert_attribute(
+      BevyMesh::ATTRIBUTE_NORMAL,
+      mesh
+        .normals
+        .into_iter()
+        .map(|v| Into::<[f32; 3]>::into(v))
+        .collect::<Vec<_>>(),
+    );
+    bevy_mesh.set_indices(Some(bevy_render::mesh::Indices::U32(
+      mesh
         .triangles
-        .iter()
-        .flat_map(|t| vec![t.x, t.y, t.z])
-        .map(|x| x as u32)
-        .collect::<Vec<u32>>(),
+        .into_iter()
+        .map(|v| [v.x, v.y, v.z])
+        .flatten()
+        .collect(),
     )));
-
-    mesh
+    bevy_mesh
   }
 }
 
-pub fn prune_mesh(input: Mesh) -> Mesh {
-  // prune triangles outside of the -1 to 1 range on any axis
-  // to do this, we'll make a list of any violating vertices' indexes
-  // and then remove any triangles that contain them
-  const MESH_BLEED: f32 = 1.00;
-  let mut mesh = input;
-  let violating_verts = mesh
-    .vertices
-    .par_iter()
-    .enumerate()
-    .filter(|(_, v)| v[0].abs() > MESH_BLEED || v[1].abs() > MESH_BLEED || v[2].abs() > MESH_BLEED)
-    .map(|(i, _)| i)
-    .collect::<Vec<usize>>();
+pub fn implicit_normals<T: Family>(
+  mesh: &FidgetMesh,
+  tape: &Tape<T>,
+) -> Vec<glam::Vec3A> {
+  let eval = tape.new_grad_slice_evaluator();
+  let mut normals: Vec<glam::Vec3A> = vec![];
 
-  let new_triangles = mesh
-    .triangles
-    .par_iter()
-    .filter(|tri| {
-      !violating_verts
-        .iter()
-        .any(|&v| tri.data.0.iter().any(|&x| x.contains(&v)))
-    })
-    .map(|tri| *tri)
-    .collect::<Vec<_>>();
-
-  mesh.triangles = new_triangles;
-  mesh
+  for vertex in mesh.vertices.iter() {
+    let grad = eval.eval(&[vertex.x], &[vertex.y], &[vertex.z], &[]);
+    match grad {
+      Err(_) => normals.push(glam::Vec3A::ZERO),
+      Ok(grad) => {
+        let normal = glam::Vec3A::new(grad[0].dx, grad[0].dy, grad[0].dz);
+        normals.push(normal);
+      }
+    }
+  }
+  normals
 }

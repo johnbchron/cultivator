@@ -1,9 +1,11 @@
+use bevy_pixel_cam::{PixelCamBundle, PixelCamPlugin};
 use bevy::prelude::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
 use std::f32::consts::*;
 use timing::start;
 
-use planiscope::{build_from_template, LodCoord, Template};
+use planiscope::{core::{build_tree, build_chunk, Template}, coords::LodCoords};
 // use bevy_pixel_cam::{PixelCamBundle, PixelCamPlugin};
 
 fn setup(
@@ -13,18 +15,18 @@ fn setup(
 ) {
   commands.spawn((
     Camera3dBundle {
-      transform: Transform::from_xyz(3.5, 3.5, 5.0)
+      transform: Transform::from_xyz(0.0, 0.0, 25.0)
         .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
       ..default()
     },
-    // PixelCamBundle {
-    //   settings: bevy_pixel_cam::PixelCamSettings::new(
-    //     32.0,
-    //     0.0,
-    //     0.05,
-    //   ),
-    //   ..default()
-    // },
+    PixelCamBundle {
+      settings: bevy_pixel_cam::PixelCamSettings::new(
+        32.0,
+        0.0,
+        0.05,
+      ),
+      ..default()
+    },
     FlyCamera {
       sensitivity: 5.0,
       ..default()
@@ -39,37 +41,40 @@ fn setup(
   });
 
   // insert a meshed object from planiscope
-  let expr = "square(x) + square(y) + square(z) - 0.5 + (sin(x*20.0) + sin(y*20.0) + sin(z*20.0)) / 50.0".to_string();
+  let expr = "sqrt(x*x + y*y + z*z) - 20 + (sin(x) + sin(y) + sin(z))/2".to_string();
   let template = Template {
-    volume_expr: expr,
+    source: expr,
     volume_size: 100.0,
-    local_detail: 5,
-    neighbors: 1,
-    bleed: 1.1,
-    targets: vec![LodCoord::from_float_coords([0.505, 0.6, 0.505], 5)],
+    local_chunk_detail: 6,
+    neighbor_count: 1,
+    chunk_mesh_bleed: 1.1,
+    targets: vec![LodCoords::new_from_world([0.0, 0.0, 25.0].into(), 5, 100.0)],
+    world_space_eval: true,
   };
 
-  info!("meshing tree with expression \"{}\"", &template.volume_expr);
+  info!("meshing tree with expression \"{}\"", &template.source);
   let timer = start();
-  let mut tree = build_from_template(template);
+  let coords = build_tree(&template);
+  let chunks = coords
+    .into_iter()
+    .map(|coords| build_chunk(&template, coords))
+    .collect::<Vec<_>>();
   info!("meshed tree in {}ms", timer.stop().as_millis());
-  info!("tree has {} chunks", tree.iter_chunks().count());
+  info!("generated {} chunks", chunks.iter().count());
   info!(
     "tree has {} vertices",
-    tree
-      .iter_chunks()
-      .map(|(_, chunk_c)| chunk_c.chunk.full_mesh.mesh.vertices.len())
+    chunks
+      .iter()
+      .map(|v| v.1.vertices.len())
       .sum::<usize>()
   );
 
-  for (_, chunk_container) in tree.iter_chunks() {
-    let chunk = &chunk_container.chunk;
-
-    if chunk.full_mesh.mesh.vertices.is_empty() {
+  for chunk in chunks.iter() {
+    if chunk.1.vertices.is_empty() {
       continue;
     }
 
-    let mesh_handle = meshes.add(chunk.full_mesh.clone().into());
+    let mesh_handle = meshes.add(chunk.1.clone().into());
     commands.spawn(PbrBundle {
       mesh: mesh_handle,
       material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
@@ -100,7 +105,8 @@ fn main() {
       brightness: 1.0 / 5.0f32,
     })
     .add_plugins(DefaultPlugins)
-    // .add_plugin(PixelCamPlugin)
+    .add_plugin(WorldInspectorPlugin::new())
+    .add_plugin(PixelCamPlugin)
     .add_plugin(FlyCameraPlugin)
     .add_startup_system(setup)
     .add_system(animate_light_direction)
