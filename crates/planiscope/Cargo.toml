@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# nalgebra = "0.31"
-fidget = { path = "../../../fidget/fidget" }
+fidget = { path = "../../../fidget/fidget", default-features = false, features = ["rhai", "render", "mesh"] }
 spatialtree = "0.1.1"
 bevy_render = "0.10.1"
 glam = "0.24.0"

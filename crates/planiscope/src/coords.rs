@@ -75,9 +75,9 @@ pub fn transform_context(
   let scaled_x = ctx.mul(x, transform.scale.x).unwrap();
   let scaled_y = ctx.mul(y, transform.scale.y).unwrap();
   let scaled_z = ctx.mul(z, transform.scale.z).unwrap();
-  let translated_x = ctx.sub(scaled_x, transform.position.x).unwrap();
-  let translated_y = ctx.sub(scaled_y, transform.position.y).unwrap();
-  let translated_z = ctx.sub(scaled_z, transform.position.z).unwrap();
+  let translated_x = ctx.add(scaled_x, transform.position.x).unwrap();
+  let translated_y = ctx.add(scaled_y, transform.position.y).unwrap();
+  let translated_z = ctx.add(scaled_z, transform.position.z).unwrap();
   ctx
     .remap_xyz(root, [translated_x, translated_y, translated_z])
     .unwrap()

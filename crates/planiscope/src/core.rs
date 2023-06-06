@@ -38,9 +38,6 @@ pub struct ChunkMetadata {
 }
 
 pub fn build_tree(template: &Template) -> Vec<LodCoords> {
-  let _ = &template.targets.iter().for_each(|v| {
-    println!("{:?}", v.float_center_coords());
-  });
   let mut tree = LodTree::with_capacity(32, 64);
   tree.lod_update(
     &template

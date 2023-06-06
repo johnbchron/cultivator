@@ -14,7 +14,7 @@ pub struct FullMesh {
 impl FullMesh {
   pub fn mesh_new<T: Family>(tape: &Tape<T>, depth: u8) -> Self {
     let settings = Settings {
-      threads: 8,
+      threads: 6,
       min_depth: depth,
       max_depth: 0,
     };

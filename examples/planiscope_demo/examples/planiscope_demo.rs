@@ -40,14 +40,14 @@ fn setup(
   });
 
   // insert a meshed object from planiscope
-  let expr = "y + 0.1 + max(min((sin(x/2) + sin(z/2)) / 2.0, 0.5), -0.5)*4".to_string();
+  let expr = "sqrt(square(x)+square(y)+square(z)) - 20".to_string();
   let template = Template {
     source: expr,
-    volume_size: 10000.0,
-    local_chunk_detail: 6,
+    volume_size: 100.0,
+    local_chunk_detail: 7,
     neighbor_count: 1,
     chunk_mesh_bleed: 1.1,
-    targets: vec![LodCoords::new_from_world([0.0, 0.0, 0.0].into(), 5, 10000.0)],
+    targets: vec![LodCoords::new_from_world([0.0, 50.0, 0.0].into(), 5, 100.0)],
   };
 
   info!("meshing tree with expression \"{}\"", &template.source);
