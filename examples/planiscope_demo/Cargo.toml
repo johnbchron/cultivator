@@ -11,5 +11,4 @@ bevy_fly_camera = "0.10.0"
 planiscope = { path = "../../crates/planiscope" }
 bevy_pixel_cam = { path = "../../crates/bevy_pixel_cam" }
 timing = "0.2.3"
-
 bevy-inspector-egui = "0.18.3"

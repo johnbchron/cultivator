@@ -44,7 +44,7 @@ impl FullMesh {
 
   pub fn transform(&mut self, transform: &Transform) {
     self.vertices.iter_mut().for_each(|v| {
-      *v = *v * transform.scale + transform.position;
+      *v = v.mul_add(transform.scale, transform.position);
     });
   }
 

@@ -1,12 +1,11 @@
-use bevy_pixel_cam::{PixelCamBundle, PixelCamPlugin};
 use bevy::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
+use bevy_pixel_cam::PixelCamBundle;
+// use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use std::f32::consts::*;
 use timing::start;
 
 use planiscope::{core::{build_tree, build_chunk, Template}, coords::LodCoords};
-// use bevy_pixel_cam::{PixelCamBundle, PixelCamPlugin};
 
 fn setup(
   mut commands: Commands,
@@ -19,14 +18,14 @@ fn setup(
         .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
       ..default()
     },
-    PixelCamBundle {
-      settings: bevy_pixel_cam::PixelCamSettings::new(
-        32.0,
-        0.0,
-        0.05,
-      ),
-      ..default()
-    },
+    // PixelCamBundle {
+    //   settings: bevy_pixel_cam::PixelCamSettings::new(
+    //     24.0,
+    //     1.0,
+    //     0.05
+    //   ), 
+    //   ..default()
+    // },
     FlyCamera {
       sensitivity: 5.0,
       ..default()
@@ -41,15 +40,14 @@ fn setup(
   });
 
   // insert a meshed object from planiscope
-  let expr = "sqrt(x*x + y*y + z*z) - 20 + (sin(x) + sin(y) + sin(z))/2".to_string();
+  let expr = "y + 0.1 + max(min((sin(x/2) + sin(z/2)) / 2.0, 0.5), -0.5)*4".to_string();
   let template = Template {
     source: expr,
-    volume_size: 100.0,
+    volume_size: 10000.0,
     local_chunk_detail: 6,
     neighbor_count: 1,
     chunk_mesh_bleed: 1.1,
-    targets: vec![LodCoords::new_from_world([0.0, 0.0, 25.0].into(), 5, 100.0)],
-    world_space_eval: true,
+    targets: vec![LodCoords::new_from_world([0.0, 0.0, 0.0].into(), 5, 10000.0)],
   };
 
   info!("meshing tree with expression \"{}\"", &template.source);
@@ -105,9 +103,9 @@ fn main() {
       brightness: 1.0 / 5.0f32,
     })
     .add_plugins(DefaultPlugins)
-    .add_plugin(WorldInspectorPlugin::new())
-    .add_plugin(PixelCamPlugin)
+    // .add_plugin(WorldInspectorPlugin::new())
     .add_plugin(FlyCameraPlugin)
+    .add_plugin(bevy_pixel_cam::PixelCamPlugin)
     .add_startup_system(setup)
     .add_system(animate_light_direction)
     .run();

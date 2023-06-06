@@ -13,7 +13,18 @@ pub struct Template {
   pub neighbor_count: u8,
   pub chunk_mesh_bleed: f32,
   pub targets: Vec<LodCoords>,
-  pub world_space_eval: bool,
+}
+
+impl Template {
+  fn world_transform(&self, coords: &LodCoords) -> Transform {
+    Transform {
+      position: coords.float_center_coords() * self.volume_size / 4.0,
+      scale: coords.float_size() * self.volume_size / 4.0 * self.chunk_mesh_bleed,
+    }
+  }
+  fn map_transform(&self, coords: &LodCoords) -> Transform {
+    self.world_transform(coords)
+  }
 }
 
 pub struct Chunk(pub ChunkMetadata, pub FullMesh);
@@ -47,22 +58,15 @@ pub fn build_tree(template: &Template) -> Vec<LodCoords> {
 
 pub fn build_chunk(template: &Template, coords: LodCoords) -> Chunk {
   let (root, mut ctx) = eval(&template.source).unwrap();
-  let mut transform: Transform = coords.clone().into();
-  transform.scale *= template.chunk_mesh_bleed;
-  if template.world_space_eval {
-    transform.position *= template.volume_size / 4.0;
-    transform.scale *= template.volume_size / 4.0;
-  }
+  let transform = template.map_transform(&coords);
+  
   let root = transform_context(root, &mut ctx, &transform);
   let local_tape = ctx.get_tape::<EvalFamily>(root).unwrap();
   let mut full_mesh: FullMesh =
     FullMesh::mesh_new(&local_tape, template.local_chunk_detail);
   full_mesh.prune();
 
-  if !template.world_space_eval {
-    transform.position *= template.volume_size / 4.0;
-    transform.scale *= template.volume_size / 4.0;
-  }
+  let transform = template.map_transform(&coords);
   full_mesh.transform(&transform);
 
   Chunk(
