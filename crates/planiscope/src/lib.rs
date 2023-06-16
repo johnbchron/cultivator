@@ -1,1 +1,1 @@
-mod shape;
+pub mod shape;
