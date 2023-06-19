@@ -2,10 +2,10 @@ use bevy::prelude::*;
 use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
 use bevy_pixel_cam::PixelCamBundle;
 // use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use std::f32::consts::*;
+use std::{f32::consts::*, ops::Deref};
 use timing::start;
 
-use planiscope::{core::{build_tree, build_chunk, Template}, coords::LodCoords};
+use planiscope::{shape::{Shape, ShapeDef, ShapeOp, UnaryOp}, comp::Composition};
 
 fn setup(
   mut commands: Commands,
@@ -39,47 +39,50 @@ fn setup(
     ..default()
   });
 
-  // insert a meshed object from planiscope
-  let expr = "sqrt(square(x)+square(y)+square(z)) - 20".to_string();
-  let template = Template {
-    source: expr,
-    volume_size: 100.0,
-    local_chunk_detail: 7,
-    neighbor_count: 1,
-    chunk_mesh_bleed: 1.1,
-    targets: vec![LodCoords::new_from_world([0.0, 50.0, 0.0].into(), 5, 100.0)],
-  };
-
-  info!("meshing tree with expression \"{}\"", &template.source);
-  let timer = start();
-  let coords = build_tree(&template);
-  let chunks = coords
-    .into_iter()
-    .map(|coords| build_chunk(&template, coords))
-    .collect::<Vec<_>>();
-  info!("meshed tree in {}ms", timer.stop().as_millis());
-  info!("generated {} chunks", chunks.iter().count());
-  info!(
-    "tree has {} vertices",
-    chunks
-      .iter()
-      .map(|v| v.1.vertices.len())
-      .sum::<usize>()
-  );
-
-  for chunk in chunks.iter() {
-    if chunk.1.vertices.is_empty() {
-      continue;
-    }
-
-    let mesh_handle = meshes.add(chunk.1.clone().into());
-    commands.spawn(PbrBundle {
-      mesh: mesh_handle,
-      material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
-      // transform: bevy_transform,
-      ..Default::default()
-    });
+  let mut composition = Composition::new();
+  // add a bunch of spheres in random positions with the rand crate
+  for _ in 0..20 {
+    let x = rand::random::<f32>() * 10.0 - 5.0;
+    let y = rand::random::<f32>() * 10.0 - 5.0;
+    let z = rand::random::<f32>() * 10.0 - 5.0;
+    let radius = rand::random::<f32>() * 0.5 + 0.5;
+    let r: u8 = rand::random::<u8>();
+    let g: u8 = rand::random::<u8>();
+    let b: u8 = rand::random::<u8>();
+    composition.add_shape(
+      Shape::ShapeOp(
+        ShapeOp::UnaryOp(
+          UnaryOp::Recolor { rgb: [r, g, b] },
+          Box::new(Shape::ShapeDef(
+            ShapeDef::SpherePrimitive { radius: radius }
+          ))
+        )
+      ),
+      [x, y, z],
+    );
   }
+  let mut context = fidget::Context::new();
+  let timer = start();
+  let node = composition.compile_solid(&mut context, &planiscope::comp::RenderSettings { min_voxel_size: 0.1 });
+  println!("compile_solid took {}ms", timer.elapsed().as_millis());
+  println!("context is {} bytes in memory", context.size_of());
+  let timer = start();
+  let tape: fidget::eval::Tape<fidget::vm::Eval> = context.get_tape(node).unwrap();
+  println!("get_tape took {}ms", timer.elapsed().as_millis());
+  println!("tape has {} nodes", tape.len());
+  let timer = start();
+  let interval_eval = tape.new_interval_evaluator();
+  let (_, simplify) = interval_eval.eval(
+      [-1.0, 1.0], // X
+      [-1.0, 1.0], // Y
+      [-1.0, 1.0], // Z
+      &[]         // variables (unused)
+  ).unwrap();
+  let simplify = simplify.unwrap().simplify().unwrap();
+  println!("simplification took {}ms", timer.elapsed().as_millis());
+  println!("simplified tape has {} nodes", simplify.len());
+  
+  
 }
 
 fn animate_light_direction(

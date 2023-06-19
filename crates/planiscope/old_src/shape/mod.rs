@@ -34,7 +34,7 @@ pub struct BuildSettings {
   pub min_voxel_size: fixed::types::I16F16,
 }
 
-pub trait Shape: Debug + Send + Sync {
+pub trait Shape: Debug + Sized + Send + Sync {
   fn solid(&self, ctx: &mut Context, settings: &BuildSettings) -> Node;
   fn bound_solid(&self, ctx: &mut Context, settings: &BuildSettings) -> Node {
     let shape = self.solid(ctx, settings);

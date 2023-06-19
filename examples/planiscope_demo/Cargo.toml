@@ -6,9 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.10.1", default_features = false, features = [ "bevy_asset", "bevy_winit", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "x11", "dynamic_linking" ] }
+bevy = { version = "0.10.1", default-features = false, features = [ "bevy_asset", "bevy_winit", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "x11", "dynamic_linking" ] }
 bevy_fly_camera = "0.10.0"
+fidget = { path = "../../../fidget/fidget", default-features = false, features = ["jit"] }
 planiscope = { path = "../../crates/planiscope" }
 bevy_pixel_cam = { path = "../../crates/bevy_pixel_cam" }
 timing = "0.2.3"
 bevy-inspector-egui = "0.18.3"
+rand = "0.8.5"
