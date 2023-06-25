@@ -15,6 +15,12 @@ pub struct Composition {
   shapes: Vec<(Shape, Position)>,
 }
 
+impl Default for Composition {
+  fn default() -> Self {
+    Self::new()
+  }
+}     
+
 impl Composition {
   pub fn new() -> Self {
     Composition { shapes: Vec::new() }
@@ -64,7 +70,7 @@ fn binary_shape_tree(nodes: Vec<Node>, ctx: &mut Context) -> Node {
       } else {
         a
       };
-      let node = ctx.min(a.clone(), b.clone()).unwrap();
+      let node = ctx.min(*a, *b).unwrap();
       new_tree.push(node);
     }
     min_tree = new_tree;

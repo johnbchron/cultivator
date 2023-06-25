@@ -52,8 +52,7 @@ pub fn csg_clamp(shape: Node, ctx: &mut Context) -> Node {
   let one = ctx.constant(1.0);
   let neg_one = ctx.constant(-1.0);
   let outside_bounded = ctx.min(steep_shape, one).unwrap();
-  let inside_bounded = ctx.max(outside_bounded, neg_one).unwrap();
-  return inside_bounded;
+  ctx.max(outside_bounded, neg_one).unwrap()
 }
 
 pub fn csg_color(shape: Node, rgb: [u8; 3], ctx: &mut Context) -> Node {
@@ -62,7 +61,7 @@ pub fn csg_color(shape: Node, rgb: [u8; 3], ctx: &mut Context) -> Node {
 	// divide by 2^24 to get a float between 0 and 1
 	let rgb = rgb as f64 / 2_f64.powi(24);
 	// convert to a node
-	let rgb = ctx.constant(rgb.into());
+	let rgb = ctx.constant(rgb);
 	
 	// convert from -1 inside and 1 outside to 1 inside and 0 outside
 	let neg_point_five = ctx.constant(-0.5);
@@ -77,7 +76,5 @@ pub fn csg_color(shape: Node, rgb: [u8; 3], ctx: &mut Context) -> Node {
 	let zero = ctx.constant(0.0);
 	let shape = ctx.max(shape, zero).unwrap();
 	let one = ctx.constant(1.0);
-	let shape = ctx.min(shape, one).unwrap();
-	
-	shape
+  ctx.min(shape, one).unwrap()
 }

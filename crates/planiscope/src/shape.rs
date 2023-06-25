@@ -53,7 +53,7 @@ impl ShapeDef {
     match self {
       Self::SpherePrimitive { radius } => {
         if *radius * 2.0 < settings.min_voxel_size {
-          return ctx.constant(1.0.into());
+          return ctx.constant(1.0);
         }
 
         let r = ctx.constant((*radius).into());
@@ -66,11 +66,11 @@ impl ShapeDef {
         let r_sq = ctx.square(r).unwrap();
         let sum = ctx.add(x_sq, y_sq).unwrap();
         let sum = ctx.add(sum, z_sq).unwrap();
-        let sub = ctx.sub(sum, r_sq).unwrap();
-        return sub;
+        ctx.sub(sum, r_sq).unwrap()
       }
     }
   }
+  #[allow(clippy::match_single_binding)]
   pub fn compile_color(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
   	match self {
   		_ => {
