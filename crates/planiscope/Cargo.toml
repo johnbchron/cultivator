@@ -8,6 +8,6 @@ indexmap = "1.9.3"
 fidget = { path = "../../../fidget/fidget", default-features = false, features = ["render", "mesh"] }
 # dyn-clone = "1.0.11"
 # fixed = "1.23.1"
-# glam = "0.24.0"
+glam = "0.24.0"
 # spatialtree = "0.1.1"
-# bevy_render = "0.10.1"
+bevy_render = "0.10.1"

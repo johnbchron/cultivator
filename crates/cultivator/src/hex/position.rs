@@ -13,8 +13,8 @@ use hexx::Hex;
 /// `map_index` is the index of the map that the tile belongs to.
 #[derive(Component, Hash, PartialEq, Eq, Default)]
 pub struct HexPosition {
-  pub pos: Hex,
-  pub level: HexLevel,
+  pub pos:       Hex,
+  pub level:     HexLevel,
   pub map_index: u8,
 }
 

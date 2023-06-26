@@ -1,11 +1,14 @@
+// use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use std::{f32::consts::*, ops::Deref};
+
 use bevy::prelude::*;
 use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
 use bevy_pixel_cam::PixelCamBundle;
-// use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use std::{f32::consts::*, ops::Deref};
+use planiscope::{
+  comp::{Composition, CompilationSettings},
+  shape::{Shape, ShapeDef, ShapeOp, UnaryOp}, mesh::FullMesh,
+};
 use timing::start;
-
-use planiscope::{shape::{Shape, ShapeDef, ShapeOp, UnaryOp}, comp::Composition};
 
 fn setup(
   mut commands: Commands,
@@ -23,7 +26,7 @@ fn setup(
     //     24.0,
     //     1.0,
     //     0.05
-    //   ), 
+    //   ),
     //   ..default()
     // },
     FlyCamera {
@@ -41,48 +44,60 @@ fn setup(
 
   let mut composition = Composition::new();
   // add a bunch of spheres in random positions with the rand crate
-  for _ in 0..20 {
+  for _ in 0..200 {
     let x = rand::random::<f32>() * 10.0 - 5.0;
     let y = rand::random::<f32>() * 10.0 - 5.0;
     let z = rand::random::<f32>() * 10.0 - 5.0;
-    let radius = rand::random::<f32>() * 0.5 + 0.5;
+    let radius = rand::random::<f32>();
     let r: u8 = rand::random::<u8>();
     let g: u8 = rand::random::<u8>();
     let b: u8 = rand::random::<u8>();
     composition.add_shape(
-      Shape::ShapeOp(
-        ShapeOp::UnaryOp(
-          UnaryOp::Recolor { rgb: [r, g, b] },
-          Box::new(Shape::ShapeDef(
-            ShapeDef::SpherePrimitive { radius: radius }
-          ))
-        )
-      ),
+      Shape::ShapeOp(ShapeOp::UnaryOp(
+        UnaryOp::Recolor { rgb: [r, g, b] },
+        Box::new(Shape::ShapeDef(ShapeDef::SpherePrimitive {
+          radius: radius,
+        })),
+      )),
       [x, y, z],
     );
   }
-  let mut context = fidget::Context::new();
-  let timer = start();
-  let node = composition.compile_solid(&mut context, &planiscope::comp::RenderSettings { min_voxel_size: 0.1 });
-  println!("compile_solid took {}ms", timer.elapsed().as_millis());
-  println!("context is {} bytes in memory", context.size_of());
-  let timer = start();
-  let tape: fidget::eval::Tape<fidget::vm::Eval> = context.get_tape(node).unwrap();
-  println!("get_tape took {}ms", timer.elapsed().as_millis());
-  println!("tape has {} nodes", tape.len());
-  let timer = start();
-  let interval_eval = tape.new_interval_evaluator();
-  let (_, simplify) = interval_eval.eval(
-      [-1.0, 1.0], // X
-      [-1.0, 1.0], // Y
-      [-1.0, 1.0], // Z
-      &[]         // variables (unused)
-  ).unwrap();
-  let simplify = simplify.unwrap().simplify().unwrap();
-  println!("simplification took {}ms", timer.elapsed().as_millis());
-  println!("simplified tape has {} nodes", simplify.len());
+  let mut ctx = fidget::Context::new();
+  let compilation_settings = CompilationSettings {
+    min_voxel_size: 0.01,
+  };
+  let solid_root_node = composition.compile_solid(
+    &mut ctx,
+    &compilation_settings,
+  );
+  let color_root_node = composition.compile_color(
+    &mut ctx,
+    &compilation_settings
+  );
   
+  let solid_root_node = planiscope::csg::csg_normalize_region(solid_root_node, [0.0, 0.0, 0.0], [5.0, 5.0, 5.0], &mut ctx);
+  let color_root_node = planiscope::csg::csg_normalize_region(color_root_node, [0.0, 0.0, 0.0], [5.0, 5.0, 5.0], &mut ctx);
   
+  let solid_tape: fidget::eval::Tape<fidget::vm::Eval> =
+    ctx.get_tape(solid_root_node).unwrap();
+  let color_tape: fidget::eval::Tape<fidget::vm::Eval> =
+    ctx.get_tape(color_root_node).unwrap();
+    
+  println!("building mesh...");
+  let start = start();
+  let mut full_mesh: FullMesh = FullMesh::mesh_new(&solid_tape, &color_tape, 7);
+  println!("mesh has {} vertices", full_mesh.vertices.len());
+  full_mesh.prune();
+  full_mesh.denormalize([0.0, 0.0, 0.0].into(), [5.0, 5.0, 5.0].into());
+  let mesh = Mesh::from(full_mesh);
+  println!("built mesh in {} ms", start.elapsed().as_millis());
+  
+  let mesh_handle = meshes.add(mesh);
+  commands.spawn(PbrBundle {
+    mesh: mesh_handle,
+    material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
+    ..Default::default()
+  });
 }
 
 fn animate_light_direction(
@@ -102,7 +117,7 @@ fn animate_light_direction(
 fn main() {
   App::new()
     .insert_resource(AmbientLight {
-      color: Color::WHITE,
+      color:      Color::WHITE,
       brightness: 1.0 / 5.0f32,
     })
     .add_plugins(DefaultPlugins)

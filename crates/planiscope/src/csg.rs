@@ -1,4 +1,3 @@
-
 use fidget::{context::Node, Context};
 
 pub fn csg_union(a: Node, b: Node, ctx: &mut Context) -> Node {
@@ -46,6 +45,31 @@ pub fn csg_scale(shape: Node, scale: [f32; 3], ctx: &mut Context) -> Node {
   ctx.remap_xyz(shape, [new_x, new_y, new_z]).unwrap()
 }
 
+/// Transform volume of size `size` centered at `pos` to a unit cube
+pub fn csg_normalize_region(
+  shape: Node,
+  pos: [f32; 3],
+  size: [f32; 3],
+  ctx: &mut Context,
+) -> Node {
+  let x = ctx.x();
+  let y = ctx.y();
+  let z = ctx.z();
+  let pos_x = ctx.constant(pos[0].into());
+  let pos_y = ctx.constant(pos[1].into());
+  let pos_z = ctx.constant(pos[2].into());
+  let size_x = ctx.constant(size[0].into());
+  let size_y = ctx.constant(size[1].into());
+  let size_z = ctx.constant(size[2].into());
+  let moved_x = ctx.add(x, pos_x).unwrap();
+  let moved_y = ctx.add(y, pos_y).unwrap();
+  let moved_z = ctx.add(z, pos_z).unwrap();
+  let new_x = ctx.mul(moved_x, size_x).unwrap();
+  let new_y = ctx.mul(moved_y, size_y).unwrap();
+  let new_z = ctx.mul(moved_z, size_z).unwrap();
+  ctx.remap_xyz(shape, [new_x, new_y, new_z]).unwrap()
+}
+
 pub fn csg_clamp(shape: Node, ctx: &mut Context) -> Node {
   let steep_slope = ctx.constant(1000.0);
   let steep_shape = ctx.mul(shape, steep_slope).unwrap();
@@ -56,25 +80,24 @@ pub fn csg_clamp(shape: Node, ctx: &mut Context) -> Node {
 }
 
 pub fn csg_color(shape: Node, rgb: [u8; 3], ctx: &mut Context) -> Node {
-	// bitshift the rgb array into a 24bit integer
-	let rgb = (rgb[0] as u32) << 16 | (rgb[1] as u32) << 8 | (rgb[2] as u32);
-	// divide by 2^24 to get a float between 0 and 1
-	let rgb = rgb as f64 / 2_f64.powi(24);
-	// convert to a node
-	let rgb = ctx.constant(rgb);
-	
-	// convert from -1 inside and 1 outside to 1 inside and 0 outside
-	let neg_point_five = ctx.constant(-0.5);
-	let one = ctx.constant(1.0);
-	let shape = ctx.mul(shape, neg_point_five).unwrap();
-	let shape = ctx.add(shape, one).unwrap();
-	
-	// multiply by rgb
-	let shape = ctx.mul(shape, rgb).unwrap();
-	
-	// clamp to 0-1
-	let zero = ctx.constant(0.0);
-	let shape = ctx.max(shape, zero).unwrap();
-	let one = ctx.constant(1.0);
-  ctx.min(shape, one).unwrap()
+  // bitshift the rgb array into a 24bit integer
+  let rgb = (rgb[0] as u32) << 16 | (rgb[1] as u32) << 8 | (rgb[2] as u32);
+  let rgb = rgb as f64 / 16_777_215.0;
+  // convert to a node
+  let rgb = ctx.constant(rgb);
+
+  // convert from -1 inside and 1 outside to 1 inside and 0 outside
+  let neg_point_five = ctx.constant(-0.5);
+  let one = ctx.constant(1.0);
+  let shape = ctx.sub(shape, one).unwrap();
+  let shape = ctx.mul(shape, neg_point_five).unwrap();
+
+  // clamp to 0-1
+  let zero = ctx.constant(0.0);
+  let shape = ctx.max(shape, zero).unwrap();
+  let one = ctx.constant(1.0);
+  let shape = ctx.min(shape, one).unwrap();
+
+  // multiply by rgb
+  ctx.mul(shape, rgb).unwrap()
 }

@@ -1,9 +1,7 @@
 mod constants;
 mod hex;
 
-use constants::*;
-use hex::item::HexItem;
-use hex::position::HexPosition;
+use std::collections::HashMap;
 
 use bevy::{
   app::{App, PluginGroup},
@@ -29,7 +27,7 @@ use bevy::{
     camera::{Camera, Projection},
     mesh::Mesh,
     texture::ImagePlugin,
-    view::{ColorGrading},
+    view::ColorGrading,
   },
   time::Time,
   transform::components::Transform,
@@ -40,12 +38,11 @@ use bevy::{
 use bevy_diagnostic_vertex_count::{
   VertexCountDiagnosticsPlugin, VertexCountDiagnosticsSettings,
 };
-use bevy_pixel_cam::{PixelCamPlugin, PixelCamSettings, PixelCamBundle};
-use planiscope::{sample_tessellate, to_bevy_mesh};
-
+use bevy_pixel_cam::{PixelCamBundle, PixelCamPlugin, PixelCamSettings};
+use constants::*;
+use hex::{item::HexItem, position::HexPosition};
 use hexx::*;
-
-use std::collections::HashMap;
+use planiscope::{sample_tessellate, to_bevy_mesh};
 // for enum to vec
 use strum::IntoEnumIterator;
 
@@ -139,7 +136,9 @@ fn setup_graphics(mut commands: Commands) {
   // spawn lighting
   commands.spawn(DirectionalLightBundle {
     // point straight down
-    transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+    transform: Transform::from_rotation(Quat::from_rotation_x(
+      -std::f32::consts::FRAC_PI_2,
+    )),
     ..default()
   });
   commands.spawn(PointLightBundle {
@@ -158,11 +157,7 @@ fn setup_graphics(mut commands: Commands) {
     Camera3dBundle {
       transform: Transform::from_translation(Vec3::new(0.0, 20.0, 20.0))
         .with_rotation(isometric_rotation)
-        .with_translation(Vec3::new(
-          0.0,
-          10.0,
-          10.0,
-        )),
+        .with_translation(Vec3::new(0.0, 10.0, 10.0)),
       // projection: Projection::Orthographic(OrthographicProjection {
       //   scaling_mode: ScalingMode::WindowSize(UNIT_TO_PIXEL),
       //   ..Default::default()
@@ -190,7 +185,10 @@ fn build_planiscope_test_tessellation(
 }
 
 fn handle_camera_movement(
-  mut query: Query<(&mut Transform, &mut Projection, &mut PixelCamSettings), With<Camera>>,
+  mut query: Query<
+    (&mut Transform, &mut Projection, &mut PixelCamSettings),
+    With<Camera>,
+  >,
   time: Res<Time>,
   keyboard_input: Res<Input<KeyCode>>,
 ) {
@@ -259,21 +257,17 @@ fn main() {
         })
         .set(ImagePlugin::default_nearest()),
     )
-    
     // graphics plugins
     // .add_plugin(PixelCamPlugin)
-    
     // diagnostic config
     .add_plugin(LogDiagnosticsPlugin::default())
     .add_plugin(FrameTimeDiagnosticsPlugin::default())
     .add_plugin(EntityCountDiagnosticsPlugin::default())
     .insert_resource(VertexCountDiagnosticsSettings { only_visible: true })
     .add_plugin(VertexCountDiagnosticsPlugin::default())
-    
     // prebuild meshes and materials
     // .init_resource::<HexMaterials>()
     // .init_resource::<HexMeshes>()
-    
     // setup graphics
     .add_startup_system(setup_graphics)
     // spawn game objects
@@ -282,7 +276,6 @@ fn main() {
     // handle input
     .add_system(handle_camera_movement)
     // maintainers
-    
     // run app
     .run();
 }

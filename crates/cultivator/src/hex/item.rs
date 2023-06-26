@@ -1,20 +1,20 @@
-use crate::constants::*;
-
+use bevy::{
+  asset::{AssetServer, Handle},
+  ecs::component::Component,
+  pbr::StandardMaterial,
+  render::{
+    color::Color,
+    mesh::{Indices, Mesh},
+    render_resource::PrimitiveTopology,
+    texture::Image,
+  },
+};
 use hexx::*;
-
-use bevy::asset::AssetServer;
-use bevy::asset::Handle;
-use bevy::ecs::component::Component;
-use bevy::pbr::StandardMaterial;
-use bevy::render::color::Color;
-use bevy::render::mesh::Indices;
-use bevy::render::mesh::Mesh;
-use bevy::render::render_resource::PrimitiveTopology;
-use bevy::render::texture::Image;
-
 use rand::Rng;
 // for enum to vec
 use strum_macros::EnumIter;
+
+use crate::constants::*;
 
 #[derive(Component)]
 #[allow(dead_code)]
@@ -70,7 +70,7 @@ impl HexItem {
   pub fn build_material(&self, asset_server: &AssetServer) -> StandardMaterial {
     StandardMaterial {
       base_color: self.base_color(),
-      
+
       base_color_texture: match self.load_texture(asset_server) {
         Some(texture) => Some(texture),
         None => StandardMaterial::default().base_color_texture,

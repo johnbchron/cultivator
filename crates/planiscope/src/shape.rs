@@ -1,8 +1,6 @@
-
-use crate::comp::RenderSettings;
-use crate::csg::*;
-
 use fidget::{context::Node, Context};
+
+use crate::{comp::CompilationSettings, csg::*};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -20,36 +18,56 @@ pub enum Shape {
 }
 
 impl Shape {
-  pub fn compile_solid(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
+  pub fn compile_solid(
+    &self,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
     match self {
-      Shape::ShapeDef(shape_def) => { shape_def.compile_solid(ctx, settings) }
-      Shape::ShapeOp(shape_op) => { shape_op.compile_solid(ctx, settings) }
+      Shape::ShapeDef(shape_def) => shape_def.compile_solid(ctx, settings),
+      Shape::ShapeOp(shape_op) => shape_op.compile_solid(ctx, settings),
     }
   }
-  pub fn compile_clamped_solid(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
+  pub fn compile_clamped_solid(
+    &self,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
     let shape = self.compile_solid(ctx, settings);
     csg_clamp(shape, ctx)
   }
-  pub fn compile_identity(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
+  pub fn compile_identity(
+    &self,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
     let shape = self.compile_clamped_solid(ctx, settings);
     let zero = ctx.constant(0.0);
     ctx.max(shape, zero).unwrap()
   }
-  pub fn compile_color(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
+  pub fn compile_color(
+    &self,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
     match self {
-      Shape::ShapeDef(shape_def) => { shape_def.compile_color(ctx, settings) }
-      Shape::ShapeOp(shape_op) => { shape_op.compile_color(ctx, settings) }
+      Shape::ShapeDef(shape_def) => shape_def.compile_color(ctx, settings),
+      Shape::ShapeOp(shape_op) => shape_op.compile_color(ctx, settings),
     }
   }
 }
 
 #[derive(Clone, Debug)]
 pub enum ShapeDef {
-	SpherePrimitive { radius: f32 },
+  SpherePrimitive { radius: f32 },
 }
 
 impl ShapeDef {
-  pub fn compile_solid(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
+  pub fn compile_solid(
+    &self,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
     match self {
       Self::SpherePrimitive { radius } => {
         if *radius * 2.0 < settings.min_voxel_size {
@@ -71,14 +89,18 @@ impl ShapeDef {
     }
   }
   #[allow(clippy::match_single_binding)]
-  pub fn compile_color(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
-  	match self {
-  		_ => {
-  			let shape = self.compile_solid(ctx, settings);
-  			let shape = csg_clamp(shape, ctx);
-  			csg_color(shape, [255, 255, 255], ctx)
-  		}
-  	}
+  pub fn compile_color(
+    &self,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
+    match self {
+      _ => {
+        let shape = self.compile_solid(ctx, settings);
+        let shape = csg_clamp(shape, ctx);
+        csg_color(shape, [255, 255, 255], ctx)
+      }
+    }
   }
 }
 
@@ -89,23 +111,39 @@ pub enum ShapeOp {
 }
 
 impl ShapeOp {
-  pub fn compile_solid(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
+  pub fn compile_solid(
+    &self,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
     match self {
-      ShapeOp::UnaryOp(unary_op, a ) => { unary_op.compile_solid(a.as_ref(), ctx, settings) }
-      ShapeOp::BinaryOp(binary_op, a, b ) => { binary_op.compile_solid(a, b, ctx, settings) }
+      ShapeOp::UnaryOp(unary_op, a) => {
+        unary_op.compile_solid(a.as_ref(), ctx, settings)
+      }
+      ShapeOp::BinaryOp(binary_op, a, b) => {
+        binary_op.compile_solid(a, b, ctx, settings)
+      }
     }
   }
-  pub fn compile_color(&self, ctx: &mut Context, settings: &RenderSettings) -> Node {
-		match self {
-			ShapeOp::UnaryOp(unary_op, a ) => { unary_op.compile_color(a.as_ref(), ctx, settings) }
-			ShapeOp::BinaryOp(binary_op, a, b ) => { binary_op.compile_color(a, b, ctx, settings) }
-		}
-	}
+  pub fn compile_color(
+    &self,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
+    match self {
+      ShapeOp::UnaryOp(unary_op, a) => {
+        unary_op.compile_color(a.as_ref(), ctx, settings)
+      }
+      ShapeOp::BinaryOp(binary_op, a, b) => {
+        binary_op.compile_color(a, b, ctx, settings)
+      }
+    }
+  }
 }
 
 #[derive(Debug)]
 pub enum UnaryOp {
-	Translate { pos: [f32; 3] },
+  Translate { pos: [f32; 3] },
   Scale { scale: [f32; 3] },
   MatrixTransform { matrix: [f32; 16] },
   Recolor { rgb: [u8; 3] },
@@ -113,7 +151,12 @@ pub enum UnaryOp {
 }
 
 impl UnaryOp {
-  pub fn compile_solid(&self, a: &Shape, ctx: &mut Context, settings: &RenderSettings) -> Node {
+  pub fn compile_solid(
+    &self,
+    a: &Shape,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
     match self {
       UnaryOp::Translate { pos } => {
         let shape = a.compile_solid(ctx, settings);
@@ -136,19 +179,22 @@ impl UnaryOp {
       }
     }
   }
-  
-  pub fn compile_color(&self, a: &Shape, ctx: &mut Context, settings: &RenderSettings) -> Node {
-		match self {
-			UnaryOp::Recolor { rgb } => {
-				let shape = a.compile_solid(ctx, settings);
-				let shape = csg_clamp(shape, ctx);
-				csg_color(shape, *rgb, ctx)
-			}
-			_ => {
-				a.compile_color(ctx, settings)
-			}
-		}
-	}
+
+  pub fn compile_color(
+    &self,
+    a: &Shape,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
+    match self {
+      UnaryOp::Recolor { rgb } => {
+        let shape = a.compile_solid(ctx, settings);
+        let shape = csg_clamp(shape, ctx);
+        csg_color(shape, *rgb, ctx)
+      }
+      _ => a.compile_color(ctx, settings),
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -160,7 +206,13 @@ pub enum BinaryOp {
 }
 
 impl BinaryOp {
-  pub fn compile_solid(&self, a: &Shape, b: &Shape, ctx: &mut Context, settings: &RenderSettings) -> Node {
+  pub fn compile_solid(
+    &self,
+    a: &Shape,
+    b: &Shape,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
     match self {
       BinaryOp::Union => {
         let a = a.compile_solid(ctx, settings);
@@ -185,33 +237,39 @@ impl BinaryOp {
     }
   }
 
-  pub fn compile_color(&self, a: &Shape, b: &Shape, ctx: &mut Context, settings: &RenderSettings) -> Node {
-  	match self {
-  	  BinaryOp::Union => {
-  	  	// copy from replacement
-  	  	BinaryOp::Replacement.compile_color(a, b, ctx, settings)
-  	  }
-  	  BinaryOp::Difference => {
-  	  	let solid = self.compile_solid(a, b, ctx, settings);
-  	  	let color = a.compile_color(ctx, settings);
-  	  	let shape = csg_clamp(solid, ctx);
-  	  	ctx.mul(color, shape).unwrap()
-  	  }
-  	  BinaryOp::Intersection => {
-		  	let solid = self.compile_solid(a, b, ctx, settings);
-		  	csg_color(solid, [255, 255, 255], ctx)
-		  }
-		  BinaryOp::Replacement => {
-  	  	let (a_shape, b_shape) = (a, b);
-  	  	let a = a_shape.compile_solid(ctx, settings);
-  	  	let b = b_shape.compile_solid(ctx, settings);
-  	  	let b = csg_difference(b, a, ctx);
-  	  	let b = csg_clamp(b, ctx);
-  	  	let a_color = a_shape.compile_color(ctx, settings);
-  	  	let b_color = b_shape.compile_color(ctx, settings);
-  	  	let b_color = ctx.mul(b_color, b).unwrap();
-  	  	ctx.add(a_color, b_color).unwrap()
-		  }
-  	}
+  pub fn compile_color(
+    &self,
+    a: &Shape,
+    b: &Shape,
+    ctx: &mut Context,
+    settings: &CompilationSettings,
+  ) -> Node {
+    match self {
+      BinaryOp::Union => {
+        // copy from replacement
+        BinaryOp::Replacement.compile_color(a, b, ctx, settings)
+      }
+      BinaryOp::Difference => {
+        let solid = self.compile_solid(a, b, ctx, settings);
+        let color = a.compile_color(ctx, settings);
+        let shape = csg_clamp(solid, ctx);
+        ctx.mul(color, shape).unwrap()
+      }
+      BinaryOp::Intersection => {
+        let solid = self.compile_solid(a, b, ctx, settings);
+        csg_color(solid, [255, 255, 255], ctx)
+      }
+      BinaryOp::Replacement => {
+        let (a_shape, b_shape) = (a, b);
+        let a = a_shape.compile_solid(ctx, settings);
+        let b = b_shape.compile_solid(ctx, settings);
+        let b = csg_difference(b, a, ctx);
+        let b = csg_clamp(b, ctx);
+        let a_color = a_shape.compile_color(ctx, settings);
+        let b_color = b_shape.compile_color(ctx, settings);
+        let b_color = ctx.mul(b_color, b).unwrap();
+        ctx.add(a_color, b_color).unwrap()
+      }
+    }
   }
 }
