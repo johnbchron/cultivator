@@ -98,7 +98,8 @@ impl ShapeDef {
       _ => {
         let shape = self.compile_solid(ctx, settings);
         let shape = csg_clamp(shape, ctx);
-        csg_color(shape, [255, 255, 255], ctx)
+        let shape = csg_color(shape, [255, 255, 255], ctx);
+        shape
       }
     }
   }
@@ -190,6 +191,13 @@ impl UnaryOp {
       UnaryOp::Recolor { rgb } => {
         let shape = a.compile_solid(ctx, settings);
         let shape = csg_clamp(shape, ctx);
+        let x = ctx.x();
+        let new_x = ctx.div(x, 1.1).unwrap();
+        let y = ctx.y();
+        let new_y = ctx.div(y, 1.1).unwrap();
+        let z = ctx.z();
+        let new_z = ctx.div(z, 1.1).unwrap();
+        let shape = ctx.remap_xyz(shape, [new_x, new_y, new_z]).unwrap();
         csg_color(shape, *rgb, ctx)
       }
       _ => a.compile_color(ctx, settings),

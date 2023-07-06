@@ -11,3 +11,4 @@ fidget = { path = "../../../fidget/fidget", default-features = false, features =
 glam = "0.24.0"
 # spatialtree = "0.1.1"
 bevy_render = "0.10.1"
+colorsys = "0.6.7"

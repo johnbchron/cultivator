@@ -5,8 +5,9 @@ use bevy::prelude::*;
 use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
 use bevy_pixel_cam::PixelCamBundle;
 use planiscope::{
-  comp::{Composition, CompilationSettings},
-  shape::{Shape, ShapeDef, ShapeOp, UnaryOp}, mesh::FullMesh,
+  comp::{CompilationSettings, Composition},
+  mesh::FullMesh,
+  shape::{Shape, ShapeDef, ShapeOp, UnaryOp},
 };
 use timing::start;
 
@@ -24,7 +25,7 @@ fn setup(
     // PixelCamBundle {
     //   settings: bevy_pixel_cam::PixelCamSettings::new(
     //     24.0,
-    //     1.0,
+    //     15.0,
     //     0.05
     //   ),
     //   ..default()
@@ -52,6 +53,7 @@ fn setup(
     let r: u8 = rand::random::<u8>();
     let g: u8 = rand::random::<u8>();
     let b: u8 = rand::random::<u8>();
+    // let (r, g, b) = (32, 0, 0);
     composition.add_shape(
       Shape::ShapeOp(ShapeOp::UnaryOp(
         UnaryOp::Recolor { rgb: [r, g, b] },
@@ -66,23 +68,29 @@ fn setup(
   let compilation_settings = CompilationSettings {
     min_voxel_size: 0.01,
   };
-  let solid_root_node = composition.compile_solid(
+  let solid_root_node =
+    composition.compile_solid(&mut ctx, &compilation_settings);
+  let color_root_node =
+    composition.compile_color(&mut ctx, &compilation_settings);
+
+  let solid_root_node = planiscope::csg::csg_normalize_region(
+    solid_root_node,
+    [0.0, 0.0, 0.0],
+    [5.0, 5.0, 5.0],
     &mut ctx,
-    &compilation_settings,
   );
-  let color_root_node = composition.compile_color(
+  let color_root_node = planiscope::csg::csg_normalize_region(
+    color_root_node,
+    [0.0, 0.0, 0.0],
+    [5.0, 5.0, 5.0],
     &mut ctx,
-    &compilation_settings
   );
-  
-  let solid_root_node = planiscope::csg::csg_normalize_region(solid_root_node, [0.0, 0.0, 0.0], [5.0, 5.0, 5.0], &mut ctx);
-  let color_root_node = planiscope::csg::csg_normalize_region(color_root_node, [0.0, 0.0, 0.0], [5.0, 5.0, 5.0], &mut ctx);
-  
+
   let solid_tape: fidget::eval::Tape<fidget::vm::Eval> =
     ctx.get_tape(solid_root_node).unwrap();
   let color_tape: fidget::eval::Tape<fidget::vm::Eval> =
     ctx.get_tape(color_root_node).unwrap();
-    
+
   println!("building mesh...");
   let start = start();
   let mut full_mesh: FullMesh = FullMesh::mesh_new(&solid_tape, &color_tape, 7);
@@ -91,7 +99,7 @@ fn setup(
   full_mesh.denormalize([0.0, 0.0, 0.0].into(), [5.0, 5.0, 5.0].into());
   let mesh = Mesh::from(full_mesh);
   println!("built mesh in {} ms", start.elapsed().as_millis());
-  
+
   let mesh_handle = meshes.add(mesh);
   commands.spawn(PbrBundle {
     mesh: mesh_handle,

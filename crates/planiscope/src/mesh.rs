@@ -1,4 +1,5 @@
-use core::cmp::{min, max};
+use core::cmp::{max, min};
+
 use bevy_render::mesh::Mesh as BevyMesh;
 use fidget::{
   eval::{Family, Tape},
@@ -25,21 +26,32 @@ impl FullMesh {
       max_depth: 0,
     };
 
+    println!("building octree");
     let octree = Octree::build::<T>(solid_tape, settings);
     let fidget_mesh = octree.walk_dual(settings);
+    println!("octree built");
 
+    println!("transforming vertices");
     let vertices = fidget_mesh
       .vertices
       .iter()
       .map(|v| glam::Vec3A::new(v.x, v.y, v.z))
       .collect();
+    println!("vertices transformed");
+
+    println!("transforming triangles");
     let triangles = fidget_mesh
       .triangles
       .iter()
       .map(|t| glam::UVec3::new(t[0] as u32, t[1] as u32, t[2] as u32))
       .collect();
+    println!("triangles transformed");
+    println!("calculating normals from surface");
     let normals = implicit_normals(&fidget_mesh, solid_tape);
+    println!("normals calculated");
+    println!("calculating colors from surface");
     let colors = implicit_colors(&fidget_mesh, color_tape);
+    println!("colors calculated");
 
     FullMesh {
       vertices,
@@ -121,13 +133,28 @@ pub fn implicit_normals<T: Family>(
   let eval = tape.new_grad_slice_evaluator();
   let mut normals: Vec<glam::Vec3A> = vec![];
 
-  for vertex in mesh.vertices.iter() {
-    let grad = eval.eval(&[vertex.x], &[vertex.y], &[vertex.z], &[]);
-    match grad {
-      Err(_) => normals.push(glam::Vec3A::ZERO),
-      Ok(grad) => {
-        let normal = glam::Vec3A::new(grad[0].dx, grad[0].dy, grad[0].dz);
-        normals.push(normal);
+  // for vertex in mesh.vertices.iter() {
+  //   let grad = eval.eval(&[vertex.x], &[vertex.y], &[vertex.z], &[]);
+  //   match grad {
+  //     Err(_) => normals.push(glam::Vec3A::ZERO),
+  //     Ok(grad) => {
+  //       let normal = glam::Vec3A::new(grad[0].dx, grad[0].dy, grad[0].dz);
+  //       normals.push(normal);
+  //     }
+  //   }
+  // }
+  // normals
+  let grad = eval.eval(
+    &mesh.vertices.iter().map(|v| v.x).collect::<Vec<_>>(),
+    &mesh.vertices.iter().map(|v| v.y).collect::<Vec<_>>(),
+    &mesh.vertices.iter().map(|v| v.z).collect::<Vec<_>>(),
+    &[],
+  );
+  match grad {
+    Err(_) => panic!("normal evaluation failed"),
+    Ok(grad) => {
+      for g in grad {
+        normals.push(glam::Vec3A::new(g.dx, g.dy, g.dz));
       }
     }
   }
@@ -141,27 +168,54 @@ pub fn implicit_colors<T: Family>(
 ) -> Vec<glam::Vec4> {
   let eval = tape.new_float_slice_evaluator();
   let mut colors: Vec<glam::Vec4> = vec![];
+  
+  let grad = eval.eval(
+    &mesh.vertices.iter().map(|v| v.x).collect::<Vec<_>>(),
+    &mesh.vertices.iter().map(|v| v.y).collect::<Vec<_>>(),
+    &mesh.vertices.iter().map(|v| v.z).collect::<Vec<_>>(),
+    &[],
+  );
 
-  for vertex in mesh.vertices.iter() {
-    let color = eval.eval(&[vertex.x], &[vertex.y], &[vertex.z], &[]);
-    match color {
-      Err(_) => panic!("color evaluation failed"),
-      Ok(color) => {
-        // code used to store the color as an f32:
-        // ```
-        // let rgb = (rgb[0] as u32) << 16 | (rgb[1] as u32) << 8 | (rgb[2] as u32);
-        // let rgb = rgb as f64 / 16_777_215.0;
-        // ```
-        
-        let normalized_color = color[0];
-        let rgb: u32 = (normalized_color * 16_777_215.0).round().try_into().unwrap();
-        let r = ((rgb >> 16) & 0xFF) as f32 / 255.0;
-        let g = ((rgb >> 8) & 0xFF) as f32 / 255.0;
-        let b = (rgb & 0xFF) as f32 / 255.0;
-        let color = glam::Vec4::new(r, g, b, 1.0);
-        colors.push(color);
+  match grad {
+    Err(_) => panic!("color evaluation failed"),
+    Ok(grad) => {
+      for g in grad {
+        colors.push(transform_implicit_color(g));
       }
     }
   }
+  
   colors
+}
+
+fn transform_implicit_color(val: f32) -> glam::Vec4 {
+  // we offset the hue by a bit when it gets set to avoid sampling red when sampling noise
+  if val < 0.1 {
+    return glam::Vec4::new(1.0, 1.0, 1.0, 1.0);
+  }
+
+  // put it back in the normal range
+  let val = (val - 0.1) / 0.9;
+  
+  let val = val * (256_u32.pow(3)) as f32;
+  // bit shift to get the original values
+  let red = ((val as u32) >> 16) as f32;
+  let green = (((val as u32) << 16) >> 24) as f32;
+  let blue = (((val as u32) << 24) >> 24) as f32;
+  
+  glam::Vec4::new(red / 255.0, green / 255.0, blue / 255.0, 1.0)
+  
+  // let rgb = colorsys::Rgb::from(colorsys::Hsl::from((
+  //   val * 360.0 as f32,
+  //   100.0_f32,
+  //   50.0_f32,
+  // )));
+  // glam::Vec4::new(
+  //   rgb.red() as f32 / 255.0,
+  //   rgb.green() as f32 / 255.0,
+  //   rgb.blue() as f32 / 255.0,
+  //   1.0,
+  // )
+  
+  
 }

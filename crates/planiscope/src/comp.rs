@@ -61,12 +61,14 @@ impl Composition {
       })
       .collect::<Vec<Node>>();
 
-    binary_shape_tree(shapes.to_vec(), ctx, BinaryShapeTreeCombinator::Add)
+    binary_shape_tree(shapes.to_vec(), ctx, BinaryShapeTreeCombinator::Max)
   }
 }
 
+#[allow(dead_code)]
 enum BinaryShapeTreeCombinator {
   Min,
+  Max,
   Add,
 }
 
@@ -87,6 +89,7 @@ fn binary_shape_tree(
       };
       let node = match combinator {
         BinaryShapeTreeCombinator::Min => ctx.min(*a, *b).unwrap(),
+        BinaryShapeTreeCombinator::Max => ctx.max(*a, *b).unwrap(),
         BinaryShapeTreeCombinator::Add => ctx.add(*a, *b).unwrap(),
       };
       new_tree.push(node);

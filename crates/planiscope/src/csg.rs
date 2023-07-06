@@ -80,11 +80,18 @@ pub fn csg_clamp(shape: Node, ctx: &mut Context) -> Node {
 }
 
 pub fn csg_color(shape: Node, rgb: [u8; 3], ctx: &mut Context) -> Node {
-  // bitshift the rgb array into a 24bit integer
-  let rgb = (rgb[0] as u32) << 16 | (rgb[1] as u32) << 8 | (rgb[2] as u32);
-  let rgb = rgb as f64 / 16_777_215.0;
-  // convert to a node
-  let rgb = ctx.constant(rgb);
+  // // get hue from 0.1 to 1
+  // let hue: f64 = colorsys::Hsl::from(colorsys::Rgb::from((
+  //   rgb[0] as u16,
+  //   rgb[1] as u16,
+  //   rgb[2] as u16,
+  // )))
+  // .hue() / 360.0 * 0.9 + 0.1;
+  
+  let bitshifted_color = rgb[0] as u32 * 256 * 256 + rgb[1] as u32 * 256 + rgb[2] as u32;
+  let float_cast_color = bitshifted_color as f32 / (256_u32).pow(3) as f32;
+  let color_val = float_cast_color * 0.9 + 0.1;
+  let color_val = ctx.constant(color_val.into());
 
   // convert from -1 inside and 1 outside to 1 inside and 0 outside
   let neg_point_five = ctx.constant(-0.5);
@@ -99,5 +106,5 @@ pub fn csg_color(shape: Node, rgb: [u8; 3], ctx: &mut Context) -> Node {
   let shape = ctx.min(shape, one).unwrap();
 
   // multiply by rgb
-  ctx.mul(shape, rgb).unwrap()
+  ctx.mul(shape, color_val).unwrap()
 }
