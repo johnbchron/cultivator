@@ -2,16 +2,6 @@ use fidget::{context::Node, Context};
 
 use crate::{comp::CompilationSettings, csg::*};
 
-// ///
-// #[allow(dead_code)]
-// #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-// pub enum FieldType {
-//   Solid,
-//   Color,
-//   Identity,
-//   Semantic,
-// }
-
 /// A trait with methods for compiling Fidget nodes from shape definitions.
 pub trait ShapeLike {
   /// Compiles the solid field of a shape.

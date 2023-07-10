@@ -11,3 +11,4 @@ bevy_egui = "0.20.3"
 futures-lite = "1.13.0"
 planiscope = { path = "../planiscope" }
 fidget = { path = "../../../fidget/fidget", default-features = false }
+anyhow = "1.0.71"

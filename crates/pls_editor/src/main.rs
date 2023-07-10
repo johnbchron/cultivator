@@ -1,3 +1,6 @@
+use std::f32::consts::{FRAC_PI_4, PI};
+
+use anyhow::{Error, Result};
 use bevy::{
   prelude::*,
   tasks::{AsyncComputeTaskPool, Task},
@@ -24,26 +27,33 @@ fn main() {
     .add_system(ui_system)
     .add_system(spawn_compute_mesh_jobs)
     .add_system(handle_tasks)
+    .add_system(animate_light_direction)
     .run();
 }
 
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, PartialEq)]
 struct UiSettings {
-  name:           String,
-  parsing_error:  Option<String>,
-  min_voxel_size: f32,
-  translate:      [f32; 3],
-  scale:          [f32; 3],
+  name:          String,
+  parsing_error: Option<String>,
+  translate:     [f32; 3],
+  scale:         [f32; 3],
+  max_depth:     usize,
+  min_depth:     usize,
+  use_colors:    bool,
+  smooth_normals: bool,
 }
 
 impl Default for UiSettings {
   fn default() -> Self {
     Self {
-      name:           "shape_name".to_string(),
-      parsing_error:  None,
-      min_voxel_size: 0.1,
-      translate:      [0.0, 0.0, 0.0],
-      scale:          [5.0, 5.0, 5.0],
+      name:          "shape_name".to_string(),
+      parsing_error: None,
+      translate:     [0.0, 0.0, 0.0],
+      scale:         [5.0, 5.0, 5.0],
+      max_depth:     6,
+      min_depth:     0,
+      use_colors:    true,
+      smooth_normals: true,
     }
   }
 }
@@ -52,7 +62,7 @@ impl Default for UiSettings {
 struct UiCode(pub String);
 
 #[derive(Component)]
-struct ComputeMeshJob(Task<Mesh>);
+struct ComputeMeshJob(Task<Result<Mesh>>);
 
 #[derive(Component)]
 struct CurrentModel;
@@ -83,7 +93,12 @@ fn configure_ui_state_system(
   mut ui_code: ResMut<UiCode>,
 ) {
   ui_settings.name = "shape_name".to_string();
-  ui_code.0 = "".to_string();
+  ui_code.0 = r#"[
+  shape(
+    sphere(1.0),
+    [0.0, 0.0, 0.0]
+  )
+]"#.to_string();
 }
 
 fn ui_system(
@@ -107,20 +122,89 @@ fn ui_system(
 
       ui.vertical(|ui| {
         ui.label("Shape Code: ");
-        ui.text_edit_multiline(&mut ui_code.0);
+        ui.code_editor(&mut ui_code.0);
       });
 
-      // show parsing error
-      if let Some(error) = &ui_settings.parsing_error {
-        ui.label(error);
-      }
+      ui.label(ui_settings.parsing_error.clone().unwrap_or("".to_string()));
+      
+      ui.separator();
+
+      ui.label("Viewing Cube");
+      ui.horizontal(|ui| {
+        ui.label("Translate: ");
+        ui.add(
+          egui::DragValue::new(&mut ui_settings.translate[0])
+            .speed(0.1)
+            .clamp_range(-100.0..=100.0),
+        );
+        ui.add(
+          egui::DragValue::new(&mut ui_settings.translate[1])
+            .speed(0.1)
+            .clamp_range(-100.0..=100.0),
+        );
+        ui.add(
+          egui::DragValue::new(&mut ui_settings.translate[2])
+            .speed(0.1)
+            .clamp_range(-100.0..=100.0),
+        );
+      });
+      ui.horizontal(|ui| {
+        ui.label("Size: ");
+        ui.add(
+          egui::DragValue::new(&mut ui_settings.scale[0])
+            .speed(0.1)
+            .clamp_range(-100.0..=100.0),
+        );
+        ui.add(
+          egui::DragValue::new(&mut ui_settings.scale[1])
+            .speed(0.1)
+            .clamp_range(-100.0..=100.0),
+        );
+        ui.add(
+          egui::DragValue::new(&mut ui_settings.scale[2])
+            .speed(0.1)
+            .clamp_range(-100.0..=100.0),
+        );
+      });
+      
+      ui.separator();
+      
+      ui.label("Depth");
+      ui.horizontal(|ui| {
+        ui.label("Max: ");
+        ui.add(
+          egui::DragValue::new(&mut ui_settings.max_depth)
+            .speed(0.1)
+            .clamp_range(0..=10),
+        );
+      });
+      ui.horizontal(|ui| {
+        ui.label("Min: ");
+        ui.add(
+          egui::DragValue::new(&mut ui_settings.min_depth)
+            .speed(0.1)
+            .clamp_range(0..=10),
+        );
+      });
+      
+      ui.separator();
+      
+      ui.horizontal(|ui| {
+        ui.checkbox(&mut ui_settings.use_colors, "Use Colors");
+        ui.checkbox(&mut ui_settings.smooth_normals, "Smooth Normals");
+      });
     });
+    
+    
 }
 
 fn setup_3d_env(mut commands: Commands) {
   // lights
-  commands.spawn(PointLightBundle {
-    transform: Transform::from_xyz(4.0, 12.0, 15.0),
+  commands.spawn(DirectionalLightBundle {
+    directional_light: DirectionalLight {
+      shadows_enabled: true,
+      ..default()
+    },
     ..default()
   });
 
@@ -132,16 +216,39 @@ fn setup_3d_env(mut commands: Commands) {
   });
 }
 
-fn compute_mesh(settings: UiSettings, shapes: Vec<(Shape, [f32; 3])>) -> Mesh {
+fn animate_light_direction(
+  time: Res<Time>,
+  mut query: Query<&mut Transform, With<DirectionalLight>>,
+) {
+  for mut transform in &mut query {
+    transform.rotation = Quat::from_euler(
+      EulerRot::ZYX,
+      0.0,
+      time.elapsed_seconds() * PI / 5.0,
+      -FRAC_PI_4,
+    );
+  }
+}
+
+fn compute_mesh(
+  settings: UiSettings,
+  shapes: Vec<(Shape, [f32; 3])>,
+) -> Result<Mesh> {
   let mut composition = Composition::new();
   shapes.into_iter().for_each(|(shape, pos)| {
     composition.add_shape(shape, pos);
   });
 
+  let smallest_scale_dim = settings
+    .scale
+    .iter()
+    .min_by(|a, b| a.total_cmp(b))
+    .ok_or(Error::msg("unable to find smallest scale axis"))?;
+  let min_voxel_size =
+    smallest_scale_dim * 2.0 / 2.0f32.powi(settings.max_depth as i32);
+
   let mut ctx = fidget::Context::new();
-  let comp_settings = CompilationSettings {
-    min_voxel_size: settings.min_voxel_size,
-  };
+  let comp_settings = CompilationSettings { min_voxel_size };
 
   let solid_root_node = composition.compile_solid(&mut ctx, &comp_settings);
   let color_root_node = composition.compile_color(&mut ctx, &comp_settings);
@@ -164,23 +271,35 @@ fn compute_mesh(settings: UiSettings, shapes: Vec<(Shape, [f32; 3])>) -> Mesh {
   let color_tape: fidget::eval::Tape<fidget::vm::Eval> =
     ctx.get_tape(color_root_node).unwrap();
 
-  let mut full_mesh = FullMesh::mesh_new(&solid_tape, &color_tape, 7);
+  let mut full_mesh = FullMesh::mesh_new(
+    &solid_tape,
+    if settings.use_colors {
+      Some(&color_tape)
+    } else {
+      None
+    },
+    settings.smooth_normals,
+    settings.max_depth.try_into()?,
+    settings.min_depth.try_into()?,
+  );
+
   full_mesh.prune();
   full_mesh.denormalize(settings.translate.into(), settings.scale.into());
 
-  full_mesh.into()
+  Ok(full_mesh.into())
 }
 
 fn spawn_compute_mesh_jobs(
   mut commands: Commands,
-  mut ui_settings: ResMut<UiSettings>,
+  mut settings: ResMut<UiSettings>,
+  mut previous_settings: Local<UiSettings>,
   ui_code: Res<UiCode>,
   mut previous_code: Local<String>,
   previous_jobs: Query<Entity, With<ComputeMeshJob>>,
 ) {
   let pool = AsyncComputeTaskPool::get();
 
-  if ui_code.0 != *previous_code {
+  if ui_code.0 != *previous_code || *previous_settings != *settings {
     let shape_code = ui_code.0.clone();
 
     for job in previous_jobs.iter() {
@@ -189,19 +308,20 @@ fn spawn_compute_mesh_jobs(
 
     match eval(&shape_code) {
       Ok(shapes) => {
-        ui_settings.parsing_error = None;
-        let ui_settings = ui_settings.clone();
+        settings.parsing_error = None;
+        let ui_settings = settings.clone();
         let task = pool.spawn(async move { compute_mesh(ui_settings, shapes) });
 
         commands.spawn(ComputeMeshJob(task));
       }
       Err(error) => {
-        ui_settings.parsing_error = Some(error.to_string());
+        settings.parsing_error = Some(error.to_string());
       }
     }
   }
 
   *previous_code = ui_code.0.clone();
+  *previous_settings = settings.clone();
 }
 
 fn handle_tasks(
@@ -212,14 +332,15 @@ fn handle_tasks(
   material: Res<ModelMaterialHandle>,
 ) {
   for (entity, mut task) in &mut compute_mesh_jobs {
-    if let Some(mesh) = future::block_on(future::poll_once(&mut task.0)) {
+    if let Some(Ok(mesh)) = future::block_on(future::poll_once(&mut task.0)) {
       // Despawn the previous model
-      for entity in current_model.iter() {
-        commands.entity(entity).despawn_recursive();
+      for old_model in current_model.iter() {
+        commands.entity(old_model).despawn_recursive();
       }
 
-      // Add our new PbrBundle of components to our tagged entity
-      commands.entity(entity).insert((
+      commands.entity(entity).despawn_recursive();
+
+      commands.spawn((
         PbrBundle {
           mesh: meshes.add(mesh),
           material: material.clone(),
@@ -227,9 +348,6 @@ fn handle_tasks(
         },
         CurrentModel,
       ));
-
-      // Task is complete, so remove task component from entity
-      commands.entity(entity).remove::<ComputeMeshJob>();
     }
   }
 }

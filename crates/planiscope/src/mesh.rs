@@ -15,13 +15,16 @@ pub struct FullMesh {
 impl FullMesh {
   pub fn mesh_new<T: Family>(
     solid_tape: &Tape<T>,
-    color_tape: &Tape<T>,
-    depth: u8,
+    color_tape: Option<&Tape<T>>,
+    smooth_normals: bool,
+    max_depth: u8,
+    min_depth: u8,
   ) -> Self {
     let settings = Settings {
       threads:   6,
-      min_depth: depth,
-      max_depth: 0,
+      // no this is not a typo. I think that these are named opposite of what they should be. the smallest voxel, represented by `min_depth` is at the maximum depth. the largest voxel, represented by `max_depth` is at the minimum depth.
+      min_depth: max_depth,
+      max_depth: min_depth,
     };
 
     println!("building octree");
@@ -44,20 +47,32 @@ impl FullMesh {
       .map(|t| glam::UVec3::new(t[0] as u32, t[1] as u32, t[2] as u32))
       .collect();
     println!("triangles transformed");
-    println!("calculating normals from surface");
-    let normals = implicit_normals(&fidget_mesh, solid_tape);
-    println!("normals calculated");
-    println!("calculating colors from surface");
-    let colors = implicit_colors(&fidget_mesh, color_tape);
-    println!("colors calculated");
+    
+    let normals = match smooth_normals {
+      true => {
+        println!("calculating normals from surface");
+        let normals = implicit_normals(&fidget_mesh, solid_tape);
+        println!("normals calculated");
+        Some(normals)
+      }
+      false => None,
+    };
+    
+    let colors = match color_tape {
+      Some(color_tape) => {
+        println!("calculating colors from surface");
+        let colors = implicit_colors(&fidget_mesh, color_tape);
+        println!("colors calculated");
+        Some(colors)
+      }
+      None => None,
+    };
 
     FullMesh {
       vertices,
       triangles,
-      normals: Some(normals),
-      // normals: None,
-      colors: Some(colors),
-      // colors: None,
+      normals,
+      colors,
     }
   }
 
@@ -94,7 +109,7 @@ impl From<FullMesh> for BevyMesh {
       BevyMesh::ATTRIBUTE_POSITION,
       mesh
         .vertices
-        .into_iter()
+        .clone().into_iter()
         .map(Into::<[f32; 3]>::into)
         .collect::<Vec<_>>(),
     );
@@ -107,6 +122,7 @@ impl From<FullMesh> for BevyMesh {
           .collect::<Vec<_>>(),
       );
     } else {
+      bevy_mesh.duplicate_vertices();
       bevy_mesh.compute_flat_normals();
     }
     if let Some(colors) = mesh.colors {
@@ -149,6 +165,20 @@ pub fn implicit_normals<T: Family>(
         normals.push(glam::Vec3A::new(g.dx, g.dy, g.dz));
       }
     }
+  }
+  normals
+}
+
+pub fn flat_normals(triangles: Vec<glam::UVec3>, vertices: Vec<glam::Vec3A>) -> Vec<glam::Vec3A> {
+  let mut normals: Vec<glam::Vec3A> = vec![];
+  for t in triangles.iter() {
+    let v0 = vertices[t[0] as usize];
+    let v1 = vertices[t[1] as usize];
+    let v2 = vertices[t[2] as usize];
+    let normal = (v1 - v0).cross(v2 - v0).normalize();
+    normals.push(glam::Vec3A::new(normal.x, normal.y, normal.z));
+    normals.push(glam::Vec3A::new(normal.x, normal.y, normal.z));
+    normals.push(glam::Vec3A::new(normal.x, normal.y, normal.z));
   }
   normals
 }

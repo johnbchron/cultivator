@@ -1,4 +1,5 @@
 use rhai::{Dynamic, Engine, Scope};
+use anyhow::{Result, Error};
 
 use crate::{builder, shape::Shape};
 
@@ -11,14 +12,14 @@ pub fn attach_translate(
 ) -> ShapeWithTranslate {
   let mut pos = [0.0; 3];
   for (i, val) in translate.into_iter().enumerate() {
-    pos[i] = val.as_float().unwrap() as f32;
+    pos[i] = val.as_float().unwrap();
   }
   ShapeWithTranslate(shape, pos)
 }
 
 pub fn eval(
   code: &str,
-) -> Result<Vec<(Shape, [f32; 3])>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(Shape, [f32; 3])>> {
   let mut engine = Engine::new();
 
   engine.register_type::<Shape>();
@@ -44,13 +45,15 @@ pub fn eval(
   let ast = engine.compile(code)?;
   let mut scope = Scope::new();
   let shape_list =
-    engine.eval_ast_with_scope::<Vec<Dynamic>>(&mut scope, &ast)?;
+    engine.eval_ast_with_scope::<Vec<Dynamic>>(&mut scope, &ast).map_err(|e| {
+			Error::msg(format!("failed to eval code: {}", e))
+		})?;
 
   let mut shapes = Vec::new();
   for shape in shape_list {
     let shape_with_translate = shape
       .try_cast::<ShapeWithTranslate>()
-      .ok_or("failed to cast array contents to shape")?;
+      .ok_or(Error::msg("failed to cast array contents to shape"))?;
     shapes.push((shape_with_translate.0, shape_with_translate.1));
   }
 
