@@ -1,6 +1,9 @@
 use fidget::{context::Node, Context};
 
-use crate::{csg::csg_translate, shape::Shape};
+use crate::{
+  csg::csg_translate,
+  shape::{Shape, ShapeLike},
+};
 
 type Position = [f32; 3];
 
@@ -16,6 +19,12 @@ pub struct Composition {
 impl Default for Composition {
   fn default() -> Self {
     Self::new()
+  }
+}
+
+impl From<Vec<(Shape, Position)>> for Composition {
+  fn from(shapes: Vec<(Shape, Position)>) -> Self {
+    Composition { shapes }
   }
 }
 

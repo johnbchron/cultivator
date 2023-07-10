@@ -61,8 +61,8 @@ impl Plugin for PixelCamPlugin {
 
     // We need to get the render app from the main app
     let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
-			return;
-		};
+      return;
+    };
 
     // Initialize the pipeline
     render_app.init_resource::<PixelCamPipeline>();
@@ -180,9 +180,11 @@ impl Node for PixelCamNode {
     // We get the data we need from the world based on the view entity passed to
     // the node. The data is the query that was defined earlier in the
     // [`PostProcessNode`]
-    let Ok((view_uniform_offset, view_target, prepass_textures)) = self.query.get_manual(world, view_entity) else {
-			return Ok(());
-		};
+    let Ok((view_uniform_offset, view_target, prepass_textures)) =
+      self.query.get_manual(world, view_entity)
+    else {
+      return Ok(());
+    };
 
     // Get the pipeline resource that contains the global data we need to create
     // the render pipeline
@@ -194,16 +196,18 @@ impl Node for PixelCamNode {
     let pipeline_cache = world.resource::<PipelineCache>();
 
     // Get the pipeline from the cache
-    let Some(pipeline) = pipeline_cache.get_render_pipeline(pixel_cam_pipeline.pipeline_id) else {
-			return Ok(());
-		};
+    let Some(pipeline) =
+      pipeline_cache.get_render_pipeline(pixel_cam_pipeline.pipeline_id)
+    else {
+      return Ok(());
+    };
 
     // Get the settings uniform binding
     let settings_uniforms =
       world.resource::<ComponentUniforms<PixelCamSettings>>();
     let Some(settings_binding) = settings_uniforms.uniforms().binding() else {
-			return Ok(());
-		};
+      return Ok(());
+    };
 
     // This will start a new "post process write", obtaining two texture
     // views from the view target - a `source` and a `destination`.

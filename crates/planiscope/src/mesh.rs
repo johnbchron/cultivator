@@ -1,5 +1,3 @@
-use core::cmp::{max, min};
-
 use bevy_render::mesh::Mesh as BevyMesh;
 use fidget::{
   eval::{Family, Tape},
@@ -10,8 +8,8 @@ use fidget::{
 pub struct FullMesh {
   pub vertices:  Vec<glam::Vec3A>,
   pub triangles: Vec<glam::UVec3>,
-  pub normals:   Vec<glam::Vec3A>,
-  pub colors:    Vec<glam::Vec4>,
+  pub normals:   Option<Vec<glam::Vec3A>>,
+  pub colors:    Option<Vec<glam::Vec4>>,
 }
 
 impl FullMesh {
@@ -56,8 +54,10 @@ impl FullMesh {
     FullMesh {
       vertices,
       triangles,
-      normals,
-      colors,
+      normals: Some(normals),
+      // normals: None,
+      colors: Some(colors),
+      // colors: None,
     }
   }
 
@@ -98,22 +98,26 @@ impl From<FullMesh> for BevyMesh {
         .map(Into::<[f32; 3]>::into)
         .collect::<Vec<_>>(),
     );
-    bevy_mesh.insert_attribute(
-      BevyMesh::ATTRIBUTE_NORMAL,
-      mesh
-        .normals
-        .into_iter()
-        .map(Into::<[f32; 3]>::into)
-        .collect::<Vec<_>>(),
-    );
-    bevy_mesh.insert_attribute(
-      BevyMesh::ATTRIBUTE_COLOR,
-      mesh
-        .colors
-        .into_iter()
-        .map(Into::<[f32; 4]>::into)
-        .collect::<Vec<_>>(),
-    );
+    if let Some(normals) = mesh.normals {
+      bevy_mesh.insert_attribute(
+        BevyMesh::ATTRIBUTE_NORMAL,
+        normals
+          .into_iter()
+          .map(Into::<[f32; 3]>::into)
+          .collect::<Vec<_>>(),
+      );
+    } else {
+      bevy_mesh.compute_flat_normals();
+    }
+    if let Some(colors) = mesh.colors {
+      bevy_mesh.insert_attribute(
+        BevyMesh::ATTRIBUTE_COLOR,
+        colors
+          .iter()
+          .map(|c| [c.x, c.y, c.z, c.w])
+          .collect::<Vec<_>>(),
+      );
+    }
     bevy_mesh.set_indices(Some(bevy_render::mesh::Indices::U32(
       mesh
         .triangles
@@ -132,18 +136,6 @@ pub fn implicit_normals<T: Family>(
 ) -> Vec<glam::Vec3A> {
   let eval = tape.new_grad_slice_evaluator();
   let mut normals: Vec<glam::Vec3A> = vec![];
-
-  // for vertex in mesh.vertices.iter() {
-  //   let grad = eval.eval(&[vertex.x], &[vertex.y], &[vertex.z], &[]);
-  //   match grad {
-  //     Err(_) => normals.push(glam::Vec3A::ZERO),
-  //     Ok(grad) => {
-  //       let normal = glam::Vec3A::new(grad[0].dx, grad[0].dy, grad[0].dz);
-  //       normals.push(normal);
-  //     }
-  //   }
-  // }
-  // normals
   let grad = eval.eval(
     &mesh.vertices.iter().map(|v| v.x).collect::<Vec<_>>(),
     &mesh.vertices.iter().map(|v| v.y).collect::<Vec<_>>(),
@@ -168,7 +160,7 @@ pub fn implicit_colors<T: Family>(
 ) -> Vec<glam::Vec4> {
   let eval = tape.new_float_slice_evaluator();
   let mut colors: Vec<glam::Vec4> = vec![];
-  
+
   let grad = eval.eval(
     &mesh.vertices.iter().map(|v| v.x).collect::<Vec<_>>(),
     &mesh.vertices.iter().map(|v| v.y).collect::<Vec<_>>(),
@@ -184,38 +176,25 @@ pub fn implicit_colors<T: Family>(
       }
     }
   }
-  
+
   colors
 }
 
 fn transform_implicit_color(val: f32) -> glam::Vec4 {
-  // we offset the hue by a bit when it gets set to avoid sampling red when sampling noise
+  // we offset the hue by a bit when it gets set to avoid sampling red when
+  // sampling noise
   if val < 0.1 {
     return glam::Vec4::new(1.0, 1.0, 1.0, 1.0);
   }
 
   // put it back in the normal range
   let val = (val - 0.1) / 0.9;
-  
+
   let val = val * (256_u32.pow(3)) as f32;
   // bit shift to get the original values
   let red = ((val as u32) >> 16) as f32;
   let green = (((val as u32) << 16) >> 24) as f32;
   let blue = (((val as u32) << 24) >> 24) as f32;
-  
+
   glam::Vec4::new(red / 255.0, green / 255.0, blue / 255.0, 1.0)
-  
-  // let rgb = colorsys::Rgb::from(colorsys::Hsl::from((
-  //   val * 360.0 as f32,
-  //   100.0_f32,
-  //   50.0_f32,
-  // )));
-  // glam::Vec4::new(
-  //   rgb.red() as f32 / 255.0,
-  //   rgb.green() as f32 / 255.0,
-  //   rgb.blue() as f32 / 255.0,
-  //   1.0,
-  // )
-  
-  
 }

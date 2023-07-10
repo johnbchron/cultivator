@@ -70,6 +70,31 @@ pub fn csg_normalize_region(
   ctx.remap_xyz(shape, [new_x, new_y, new_z]).unwrap()
 }
 
+/// Transform unit cube volume to a volume of size `size` centered at `pos`
+pub fn csg_denormalize_region(
+  shape: Node,
+  pos: [f32; 3],
+  size: [f32; 3],
+  ctx: &mut Context,
+) -> Node {
+  let x = ctx.x();
+  let y = ctx.y();
+  let z = ctx.z();
+  let pos_x = ctx.constant(pos[0].into());
+  let pos_y = ctx.constant(pos[1].into());
+  let pos_z = ctx.constant(pos[2].into());
+  let size_x = ctx.constant(size[0].into());
+  let size_y = ctx.constant(size[1].into());
+  let size_z = ctx.constant(size[2].into());
+  let new_x = ctx.div(x, size_x).unwrap();
+  let new_y = ctx.div(y, size_y).unwrap();
+  let new_z = ctx.div(z, size_z).unwrap();
+  let moved_x = ctx.sub(new_x, pos_x).unwrap();
+  let moved_y = ctx.sub(new_y, pos_y).unwrap();
+  let moved_z = ctx.sub(new_z, pos_z).unwrap();
+  ctx.remap_xyz(shape, [moved_x, moved_y, moved_z]).unwrap()
+}
+
 pub fn csg_clamp(shape: Node, ctx: &mut Context) -> Node {
   let steep_slope = ctx.constant(1000.0);
   let steep_shape = ctx.mul(shape, steep_slope).unwrap();
@@ -79,16 +104,21 @@ pub fn csg_clamp(shape: Node, ctx: &mut Context) -> Node {
   ctx.max(outside_bounded, neg_one).unwrap()
 }
 
+pub fn csg_bleed(shape: Node, factor: f32, ctx: &mut Context) -> Node {
+  let shape = csg_clamp(shape, ctx);
+  let factor = ctx.constant(factor.into());
+  let x = ctx.x();
+  let new_x = ctx.div(x, factor).unwrap();
+  let y = ctx.y();
+  let new_y = ctx.div(y, factor).unwrap();
+  let z = ctx.z();
+  let new_z = ctx.div(z, factor).unwrap();
+  ctx.remap_xyz(shape, [new_x, new_y, new_z]).unwrap()
+}
+
 pub fn csg_color(shape: Node, rgb: [u8; 3], ctx: &mut Context) -> Node {
-  // // get hue from 0.1 to 1
-  // let hue: f64 = colorsys::Hsl::from(colorsys::Rgb::from((
-  //   rgb[0] as u16,
-  //   rgb[1] as u16,
-  //   rgb[2] as u16,
-  // )))
-  // .hue() / 360.0 * 0.9 + 0.1;
-  
-  let bitshifted_color = rgb[0] as u32 * 256 * 256 + rgb[1] as u32 * 256 + rgb[2] as u32;
+  let bitshifted_color =
+    rgb[0] as u32 * 256 * 256 + rgb[1] as u32 * 256 + rgb[2] as u32;
   let float_cast_color = bitshifted_color as f32 / (256_u32).pow(3) as f32;
   let color_val = float_cast_color * 0.9 + 0.1;
   let color_val = ctx.constant(color_val.into());

@@ -12,3 +12,4 @@ glam = "0.24.0"
 # spatialtree = "0.1.1"
 bevy_render = "0.10.1"
 colorsys = "0.6.7"
+rhai = { version = "1.15.1", features = ["f32_float"] }

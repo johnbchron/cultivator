@@ -1,13 +1,13 @@
 // use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use std::{f32::consts::*, ops::Deref};
+use std::f32::consts::*;
 
 use bevy::prelude::*;
 use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
 use bevy_pixel_cam::PixelCamBundle;
 use planiscope::{
+  builder::*,
   comp::{CompilationSettings, Composition},
   mesh::FullMesh,
-  shape::{Shape, ShapeDef, ShapeOp, UnaryOp},
 };
 use timing::start;
 
@@ -22,14 +22,10 @@ fn setup(
         .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
       ..default()
     },
-    // PixelCamBundle {
-    //   settings: bevy_pixel_cam::PixelCamSettings::new(
-    //     24.0,
-    //     15.0,
-    //     0.05
-    //   ),
-    //   ..default()
-    // },
+    PixelCamBundle {
+      settings: bevy_pixel_cam::PixelCamSettings::new(12.0, 15.0, 0.05),
+      ..default()
+    },
     FlyCamera {
       sensitivity: 5.0,
       ..default()
@@ -53,16 +49,7 @@ fn setup(
     let r: u8 = rand::random::<u8>();
     let g: u8 = rand::random::<u8>();
     let b: u8 = rand::random::<u8>();
-    // let (r, g, b) = (32, 0, 0);
-    composition.add_shape(
-      Shape::ShapeOp(ShapeOp::UnaryOp(
-        UnaryOp::Recolor { rgb: [r, g, b] },
-        Box::new(Shape::ShapeDef(ShapeDef::SpherePrimitive {
-          radius: radius,
-        })),
-      )),
-      [x, y, z],
-    );
+    composition.add_shape(recolor(sphere(radius), r, g, b), [x, y, z]);
   }
   let mut ctx = fidget::Context::new();
   let compilation_settings = CompilationSettings {

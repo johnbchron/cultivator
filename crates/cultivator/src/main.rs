@@ -84,48 +84,24 @@ use strum::IntoEnumIterator;
 //   hex: &Hex,
 //   hex_materials: &HexMaterials,
 //   hex_meshes: &HexMeshes,
-// ) -> (MaterialMeshBundle<StandardMaterial>, HexPosition, HexItem) {
-//   let hex_layout = HexLayout {
-//     hex_size: HEX_SIZE,
-//     ..Default::default()
-//   };
-//   let position = hex_layout.hex_to_world_pos(*hex);
-//   let material = hex_materials.0.get(grid_item).unwrap();
-//   let mesh = hex_meshes.0.get(grid_item).unwrap();
-//   (
-//     MaterialMeshBundle {
-//       mesh: mesh.clone(),
-//       material: material.clone(),
-//       transform: Transform::from_translation(Vec3::new(
-//         position.x, 0.0, position.y,
-//       ))
-//       .looking_to(Vec3::Z, Vec3::Y),
-//       ..Default::default()
-//     },
-//     HexPosition {
-//       pos: *hex,
-//       ..Default::default()
-//     },
-//     *grid_item,
-//   )
+// ) -> (MaterialMeshBundle<StandardMaterial>, HexPosition, HexItem) { let
+//   hex_layout = HexLayout { hex_size: HEX_SIZE, ..Default::default() }; let
+//   position = hex_layout.hex_to_world_pos(*hex); let material =
+//   hex_materials.0.get(grid_item).unwrap(); let mesh =
+//   hex_meshes.0.get(grid_item).unwrap(); ( MaterialMeshBundle { mesh:
+//   mesh.clone(), material: material.clone(), transform:
+//   Transform::from_translation(Vec3::new( position.x, 0.0, position.y, ))
+//   .looking_to(Vec3::Z, Vec3::Y), ..Default::default() }, HexPosition { pos:
+//   *hex, ..Default::default() }, *grid_item, )
 // }
 
 // fn build_test_grid(
 //   mut commands: Commands,
 //   hex_materials: Res<HexMaterials>,
 //   hex_meshes: Res<HexMeshes>,
-// ) {
-//   let n = 20;
-//   let mut grid = HashMap::new();
-//   for q in -n..(n + 1) {
-//     let r1 = (-n - q).max(-n);
-//     let r2 = (n - q).min(n);
-//     for r in r1..r2 {
-//       let hex = Hex::new(q, r);
-//       let item = HexItem::random();
-//       grid.insert(hex, item);
-//     }
-//   }
+// ) { let n = 20; let mut grid = HashMap::new(); for q in -n..(n + 1) { let r1
+//   = (-n - q).max(-n); let r2 = (n - q).min(n); for r in r1..r2 { let hex =
+//   Hex::new(q, r); let item = HexItem::random(); grid.insert(hex, item); } }
 
 //   for (hex, item) in grid.iter() {
 //     commands.spawn(build_hex_bundle(item, hex, &hex_materials, &hex_meshes));
