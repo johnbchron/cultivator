@@ -17,17 +17,19 @@ use planiscope::{
 fn main() {
   App::new()
     .add_plugins(DefaultPlugins)
-    .add_plugin(EguiPlugin)
+    .add_plugins(EguiPlugin)
+    // .add_plugins(bevy_panorbit_camera::PanOrbitCameraPlugin)
     .init_resource::<ModelMaterialHandle>()
     .init_resource::<UiSettings>()
     .init_resource::<UiCode>()
-    .add_startup_system(configure_visuals_system)
-    .add_startup_system(configure_ui_state_system)
-    .add_startup_system(setup_3d_env)
-    .add_system(ui_system)
-    .add_system(spawn_compute_mesh_jobs)
-    .add_system(handle_tasks)
-    .add_system(animate_light_direction)
+    .add_systems(Startup, configure_visuals_system)
+    .add_systems(Startup, configure_ui_state_system)
+    .add_systems(Startup, setup_3d_env)
+    .add_systems(Update, ui_system)
+    .add_systems(Update, spawn_compute_mesh_jobs)
+    .add_systems(Update, handle_tasks)
+    .add_systems(Update, animate_light_direction)
+    .add_systems(Update, draw_gizmos)
     .run();
 }
 
@@ -198,7 +200,9 @@ fn ui_system(
     
 }
 
-fn setup_3d_env(mut commands: Commands) {
+fn setup_3d_env(mut commands: Commands, mut gizmo_config: ResMut<GizmoConfig>) {
+  gizmo_config.depth_bias = -1.0;
+  
   // lights
   commands.spawn(DirectionalLightBundle {
     directional_light: DirectionalLight {
@@ -209,11 +213,17 @@ fn setup_3d_env(mut commands: Commands) {
   });
 
   // camera
-  commands.spawn(Camera3dBundle {
-    transform: Transform::from_xyz(0.0, 5.0, 10.0)
-      .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
-    ..default()
-  });
+  commands.spawn((
+    Camera3dBundle {
+      transform: Transform::from_xyz(2.5, 5.0, 10.0)
+        .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+      ..default()
+    },
+    // bevy_panorbit_camera::PanOrbitCamera {
+    //   focus: Vec3::ZERO,
+    //   ..default()
+    // },
+  ));
 }
 
 fn animate_light_direction(
@@ -228,6 +238,25 @@ fn animate_light_direction(
       -FRAC_PI_4,
     );
   }
+}
+
+fn draw_gizmos(mut gizmos: Gizmos) {
+  // draw axes at origin
+  gizmos.line(
+    Vec3::ZERO,
+    Vec3::X * 0.5,
+    Color::rgb(1.0, 0.0, 0.0),
+  );
+  gizmos.line(
+    Vec3::ZERO,
+    Vec3::Y * 0.5,
+    Color::rgb(0.0, 1.0, 0.0),
+  );
+  gizmos.line(
+    Vec3::ZERO,
+    Vec3::Z * 0.5,
+    Color::rgb(0.0, 0.0, 1.0),
+  );
 }
 
 fn compute_mesh(
