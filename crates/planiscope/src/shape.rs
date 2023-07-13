@@ -1,6 +1,6 @@
 use fidget::{context::Node, Context};
 
-use crate::{comp::CompilationSettings, csg::*};
+use crate::{comp::CompilationSettings, nso::*};
 
 /// A trait with methods for compiling Fidget nodes from shape definitions.
 pub trait ShapeLike {
@@ -18,7 +18,7 @@ pub trait ShapeLike {
     settings: &CompilationSettings,
   ) -> Node {
     let shape = self.compile_solid(ctx, settings);
-    csg_clamp(shape, ctx)
+    nso_clamp(shape, ctx)
   }
   /// Compiles the color field of a shape. The resulting value is the 24-bit
   /// representation of the RGB color, divided by 24-bit maximum, and mapped to
@@ -66,6 +66,8 @@ impl ShapeLike for Shape {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShapeDef {
   SpherePrimitive { radius: f32 },
+  RectPrismPrimitive { x: f32, y: f32, z: f32 },
+  CubePrimitive { size: f32 },
 }
 
 impl ShapeLike for ShapeDef {
@@ -91,7 +93,30 @@ impl ShapeLike for ShapeDef {
         let sum = ctx.add(x_sq, y_sq).unwrap();
         let sum = ctx.add(sum, z_sq).unwrap();
         ctx.sub(sum, r_sq).unwrap()
-      }
+      },
+      Self::RectPrismPrimitive {x, y, z} => {
+        if *x < settings.min_voxel_size || *y < settings.min_voxel_size || *z < settings.min_voxel_size {
+          return ctx.constant(1.0);
+        }
+        let half_x = ctx.constant((*x / 2.0).into());
+        let half_y = ctx.constant((*y / 2.0).into());
+        let half_z = ctx.constant((*z / 2.0).into());
+
+        let x = ctx.x();
+        let y = ctx.y();
+        let z = ctx.z();
+        let abs_x = ctx.abs(x).unwrap();
+        let abs_y = ctx.abs(y).unwrap();
+        let abs_z = ctx.abs(z).unwrap();
+        
+        let x = ctx.sub(abs_x, half_x).unwrap();
+        let y = ctx.sub(abs_y, half_y).unwrap();
+        let z = ctx.sub(abs_z, half_z).unwrap();
+        
+        let max_xy = ctx.max(x, y).unwrap();
+        ctx.max(max_xy, z).unwrap()
+      },
+      Self::CubePrimitive { size } => Self::RectPrismPrimitive { x: *size, y: *size, z: *size }.compile_solid(ctx, settings),
     }
   }
   #[allow(clippy::match_single_binding)]
@@ -103,9 +128,9 @@ impl ShapeLike for ShapeDef {
     match self {
       _ => {
         let shape = self.compile_clamped_solid(ctx, settings);
-        let shape = csg_bleed(shape, 1.1, ctx);
+        let shape = nso_bleed(shape, 1.1, ctx);
 
-        csg_color(shape, [255, 255, 255], ctx)
+        nso_color(shape, [255, 255, 255], ctx)
       }
     }
   }
@@ -181,11 +206,11 @@ impl UnaryOp {
     match self {
       UnaryOp::Translate { pos } => {
         let shape = a.compile_solid(ctx, settings);
-        csg_translate(shape, *pos, ctx)
+        nso_translate(shape, *pos, ctx)
       }
       UnaryOp::Scale { scale } => {
         let shape = a.compile_solid(ctx, settings);
-        csg_scale(shape, *scale, ctx)
+        nso_scale(shape, *scale, ctx)
       }
       UnaryOp::MatrixTransform { matrix: _ } => {
         todo!();
@@ -210,8 +235,8 @@ impl UnaryOp {
     match self {
       UnaryOp::Recolor { rgb } => {
         let shape = a.compile_clamped_solid(ctx, settings);
-        let shape = csg_bleed(shape, 1.1, ctx);
-        csg_color(shape, *rgb, ctx)
+        let shape = nso_bleed(shape, 1.1, ctx);
+        nso_color(shape, *rgb, ctx)
       }
       _ => a.compile_color(ctx, settings),
     }
@@ -246,22 +271,22 @@ impl BinaryOp {
       BinaryOp::Union => {
         let a = a.compile_solid(ctx, settings);
         let b = b.compile_solid(ctx, settings);
-        csg_union(a, b, ctx)
+        nso_union(a, b, ctx)
       }
       BinaryOp::Difference => {
         let a = a.compile_solid(ctx, settings);
         let b = b.compile_solid(ctx, settings);
-        csg_difference(a, b, ctx)
+        nso_difference(a, b, ctx)
       }
       BinaryOp::Intersection => {
         let a = a.compile_solid(ctx, settings);
         let b = b.compile_solid(ctx, settings);
-        csg_intersection(a, b, ctx)
+        nso_intersection(a, b, ctx)
       }
       BinaryOp::Replacement => {
         let a = a.compile_solid(ctx, settings);
         let b = b.compile_solid(ctx, settings);
-        csg_replacement(a, b, ctx)
+        nso_replacement(a, b, ctx)
       }
     }
   }
@@ -274,7 +299,7 @@ impl BinaryOp {
     settings: &CompilationSettings,
   ) -> Node {
     let shape = self.compile_solid(a, b, ctx, settings);
-    csg_clamp(shape, ctx)
+    nso_clamp(shape, ctx)
   }
 
   pub fn compile_color(
@@ -296,14 +321,14 @@ impl BinaryOp {
       }
       BinaryOp::Intersection => {
         let solid = self.compile_solid(a, b, ctx, settings);
-        csg_color(solid, [255, 255, 255], ctx)
+        nso_color(solid, [255, 255, 255], ctx)
       }
       BinaryOp::Replacement => {
         let (a_shape, b_shape) = (a, b);
         let a = a_shape.compile_solid(ctx, settings);
         let b = b_shape.compile_solid(ctx, settings);
-        let b = csg_difference(b, a, ctx);
-        let b = csg_clamp(b, ctx);
+        let b = nso_difference(b, a, ctx);
+        let b = nso_clamp(b, ctx);
         let a_color = a_shape.compile_color(ctx, settings);
         let b_color = b_shape.compile_color(ctx, settings);
         let b_color = ctx.mul(b_color, b).unwrap();

@@ -4,6 +4,12 @@ use crate::shape::{BinaryOp, Shape, ShapeDef, ShapeOp, UnaryOp};
 pub fn sphere(radius: f32) -> Shape {
   Shape::ShapeDef(ShapeDef::SpherePrimitive { radius })
 }
+pub fn box_(x: f32, y: f32, z: f32) -> Shape {
+  Shape::ShapeDef(ShapeDef::RectPrismPrimitive { x, y, z })
+}
+pub fn cube(size: f32) -> Shape {
+  Shape::ShapeDef(ShapeDef::CubePrimitive { size })
+}
 
 // unary ops
 pub fn translate(shape: Shape, x: f32, y: f32, z: f32) -> Shape {

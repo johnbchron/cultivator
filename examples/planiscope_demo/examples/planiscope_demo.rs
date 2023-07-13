@@ -60,13 +60,13 @@ fn setup(
   let color_root_node =
     composition.compile_color(&mut ctx, &compilation_settings);
 
-  let solid_root_node = planiscope::csg::csg_normalize_region(
+  let solid_root_node = planiscope::nso::nso_normalize_region(
     solid_root_node,
     [0.0, 0.0, 0.0],
     [5.0, 5.0, 5.0],
     &mut ctx,
   );
-  let color_root_node = planiscope::csg::csg_normalize_region(
+  let color_root_node = planiscope::nso::nso_normalize_region(
     color_root_node,
     [0.0, 0.0, 0.0],
     [5.0, 5.0, 5.0],

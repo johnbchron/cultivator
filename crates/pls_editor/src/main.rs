@@ -282,13 +282,13 @@ fn compute_mesh(
   let solid_root_node = composition.compile_solid(&mut ctx, &comp_settings);
   let color_root_node = composition.compile_color(&mut ctx, &comp_settings);
 
-  let solid_root_node = planiscope::csg::csg_normalize_region(
+  let solid_root_node = planiscope::nso::nso_normalize_region(
     solid_root_node,
     settings.translate,
     settings.scale,
     &mut ctx,
   );
-  let color_root_node = planiscope::csg::csg_normalize_region(
+  let color_root_node = planiscope::nso::nso_normalize_region(
     color_root_node,
     settings.translate,
     settings.scale,

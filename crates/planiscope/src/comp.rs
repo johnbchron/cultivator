@@ -1,7 +1,7 @@
 use fidget::{context::Node, Context};
 
 use crate::{
-  csg::csg_translate,
+  nso::nso_translate,
   shape::{Shape, ShapeLike},
 };
 
@@ -48,7 +48,7 @@ impl Composition {
       .iter()
       .map(|(shape, pos)| {
         let a = shape.compile_solid(ctx, settings);
-        csg_translate(a, *pos, ctx)
+        nso_translate(a, *pos, ctx)
       })
       .collect::<Vec<Node>>();
 
@@ -66,7 +66,7 @@ impl Composition {
       .iter()
       .map(|(shape, pos)| {
         let a = shape.compile_color(ctx, settings);
-        csg_translate(a, *pos, ctx)
+        nso_translate(a, *pos, ctx)
       })
       .collect::<Vec<Node>>();
 

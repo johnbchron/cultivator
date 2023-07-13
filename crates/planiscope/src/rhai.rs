@@ -24,10 +24,13 @@ pub fn eval(
 
   engine.register_type::<Shape>();
   engine.register_fn("sphere", builder::sphere);
+  engine.register_fn("box", builder::box_);
+  engine.register_fn("cube", builder::cube);
+  
   engine.register_fn("translate", builder::translate);
   engine.register_fn("scale", builder::scale);
   engine.register_fn("matrix_transform", builder::matrix_transform);
-  engine.register_fn("recolor", |shape: Shape, r: i64, g: i64, b: i64| {
+  engine.register_fn("recolor", |shape: Shape, r: i32, g: i32, b: i32| {
     builder::recolor(
       shape,
       (r % 256).try_into().unwrap(),
